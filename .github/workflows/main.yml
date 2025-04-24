@@ -12,8 +12,6 @@ jobs:
       matrix:
         node-version:
         - 23
-        - 20
-        - 18
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
