@@ -1,39 +1,31 @@
-FROM node:20-alpine
+FROM node:23-bookworm-slim
 
-# Install dependencies required for headless browsers
-RUN apk add --no-cache \
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    libstdc++ \
-    libgcc
-
+RUN apt-get update && apt-get install -y \
+    bzip2
 # Create app directory
 WORKDIR /app
 
 # Copy package files
 COPY package.json ./
 
-# Copy application code
-COPY lib ./lib
-COPY app.js ./
+
 
 # Install production dependencies only
-RUN npm i --omit=dev --verbose
-RUN npm cache clean --force
+RUN npm install -g puppeteer@24.7.1
+RUN npx @puppeteer/browsers install chrome-headless-shell@stable --verbose
 
 # Set Chrome as default browser and configure optimization flags
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/app/chrome-headless-shell/linux-135.0.7049.114/chrome-headless-shell-linux64/chrome-headless-shell \
     PORT=3000 \
     HOST=0.0.0.0 \
     BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu"
 
-# Create non-root user for security
-RUN addgroup -S appuser && adduser -S -G appuser appuser && \
-    chown -R appuser:appuser /app
-USER appuser
+    # Copy application code
+COPY lib ./lib
+COPY app.js ./
+RUN npm i --omit=dev
+RUN npm cache clean --force
 
 # Expose port
 EXPOSE 3000

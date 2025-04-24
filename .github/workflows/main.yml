@@ -46,6 +46,12 @@ jobs:
     - name: Display Node version
       run: node --version
 
+    - name: Install puppeteer
+      run: npm install -g puppeteer@24.7.1
+
+    - name: Install chrome-headless-shell
+      run: npx @puppeteer/browsers install chrome-headless-shell@stable --verbose
+
     - name: Install dependencies
       run: npm i --verbose
 

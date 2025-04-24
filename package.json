@@ -37,7 +37,6 @@
         "test:coverage": "nyc mocha --recursive --exit",
         "benchmark": "node benchmark/index.js",
         "upgrade": "npx sort-package-json && ncu -u",
-        "postinstall": "npx @puppeteer/browsers install chrome-headless-shell@stable",
         "install:browsers": "npx @puppeteer/browsers install chrome-headless-shell@stable"
     },
     "dependencies": {
@@ -47,9 +46,8 @@
         "node-cache": "^5.1.2",
         "phantom": "^6.3.0",
         "phantomjs-prebuilt": "^2.1.16",
-        "puppeteer": "^22.3.0",
+        "puppeteer": "^24.7.1",
         "uuid": "^9.0.1",
-        "@puppeteer/browsers": "^1.8.0",
         "yonius": "^0.13.11"
     },
     "devDependencies": {
