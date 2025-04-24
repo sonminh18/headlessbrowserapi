@@ -1,14 +1,15 @@
 FROM node:23-bookworm-slim
 
-RUN apt-get update && apt-get install -y \
-    bzip2
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-khmeros \
+    fonts-kacst fonts-freefont-ttf dbus dbus-x11 bzip2 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create app directory
 WORKDIR /app
 
 # Copy package files
 COPY package.json ./
-
-
 
 # Install production dependencies only
 RUN npm install -g puppeteer@24.7.1
