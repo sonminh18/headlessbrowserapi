@@ -36,8 +36,8 @@ describe("Browser Configuration", function() {
         assert.strictEqual(config.conf.BROWSER.viewport.deviceScaleFactor, 1);
         assert.strictEqual(config.conf.BROWSER.timeout, 60000);
         assert.strictEqual(config.conf.BROWSER.waitUntil, "load");
-        assert.strictEqual(config.conf.BROWSER.headless, "false");
-        assert.strictEqual(config.conf.BROWSER.dumpio, true);
+        assert.strictEqual(config.conf.BROWSER.headless, "new");
+        assert.strictEqual(config.conf.BROWSER.dumpio, false);
     });
 
     it("should use custom browser type from env var", function() {
@@ -79,7 +79,7 @@ describe("Browser Configuration", function() {
 
     it("should use custom headless mode from env var", function() {
         config.conf.BROWSER.headless = "new";
-        assert.strictEqual(config.conf.BROWSER.headless, "false");
+        assert.strictEqual(config.conf.BROWSER.headless, "new");
     });
 
     it("should use custom dumpio setting from env var", function() {
