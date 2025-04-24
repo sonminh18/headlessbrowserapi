@@ -3,10 +3,11 @@ FROM node:23-bookworm-slim as test
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-khmeros \
-    fonts-kacst fonts-freefont-ttf dbus dbus-x11 bzip2 wget \
-    libglib2.0-0 libgobject-2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+    fonts-kacst fonts-freefont-ttf dbus dbus-x11 bzip2 wget gnupg \
+    ca-certificates libglib2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
     libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
     libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2 libxss1 \
+    libxtst6 xauth xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -23,10 +24,11 @@ FROM node:23-bookworm-slim as prod
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-khmeros \
-    fonts-kacst fonts-freefont-ttf dbus dbus-x11 bzip2 wget \
-    libglib2.0-0 libgobject-2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+    fonts-kacst fonts-freefont-ttf dbus dbus-x11 bzip2 wget gnupg \
+    ca-certificates libglib2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
     libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
     libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2 libxss1 \
+    libxtst6 xauth xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
