@@ -50,11 +50,19 @@ const validateScrapeRequest = (req, res, next) => {
         // Extract and validate required parameters
         const { apikey, url } = req.query;
         
+        // Validate required parameters
         if (!apikey) {
             return res.status(400).json({ error: "API key is required", code: 400 });
         }
         if (!url) {
             return res.status(400).json({ error: "URL is required", code: 400 });
+        }
+        
+        // Validate URL format
+        try {
+            new URL(url);
+        } catch (error) {
+            return res.status(400).json({ error: "Invalid URL format", code: 400 });
         }
         
         // Set the API key in the request for verification
@@ -64,6 +72,42 @@ const validateScrapeRequest = (req, res, next) => {
             verifyKey(req);
         } catch (error) {
             return res.status(400).json({ error: error.message, code: 400 });
+        }
+        
+        // Validate timeout (must be a number)
+        if (req.query.timeout) {
+            const timeout = parseInt(req.query.timeout, 10);
+            if (isNaN(timeout) || timeout <= 0) {
+                return res.status(400).json({ error: "Timeout must be a positive number", code: 400 });
+            }
+        }
+        
+        // Validate custom cookies format if provided
+        if (req.query.custom_cookies) {
+            try {
+                JSON.parse(decodeURIComponent(req.query.custom_cookies));
+            } catch (error) {
+                return res.status(400).json({ error: "Invalid custom_cookies format. Must be URL-encoded JSON", code: 400 });
+            }
+        }
+        
+        // Validate proxy_url if provided
+        if (req.query.proxy_url) {
+            try {
+                new URL(req.query.proxy_url);
+            } catch (error) {
+                return res.status(400).json({ error: "Invalid proxy_url format", code: 400 });
+            }
+        }
+        
+        // Validate user_pass format if provided (should be username:password)
+        if (req.query.user_pass && !req.query.user_pass.includes(':')) {
+            return res.status(400).json({ error: "Invalid user_pass format. Must be 'username:password'", code: 400 });
+        }
+        
+        // Validate proxy_auth format if provided (should be username:password)
+        if (req.query.proxy_auth && !req.query.proxy_auth.includes(':')) {
+            return res.status(400).json({ error: "Invalid proxy_auth format. Must be 'username:password'", code: 400 });
         }
         
         // Get the appropriate engine

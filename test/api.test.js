@@ -280,7 +280,7 @@ describe("API Endpoints", function() {
 
                 // The API should return a 400 status for invalid URL format
                 assert.strictEqual(response.status, 400);
-                assert.ok(response.body.error);
+                assert.ok(response.body.error.includes("Invalid URL format"));
             });
 
             // Skip these tests for now as they're causing timeouts

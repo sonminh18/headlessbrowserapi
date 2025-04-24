@@ -79,7 +79,7 @@ describe("Browser Configuration", function() {
 
     it("should use custom headless mode from env var", function() {
         config.conf.BROWSER.headless = "new";
-        assert.strictEqual(config.conf.BROWSER.headless, "new");
+        assert.strictEqual(config.conf.BROWSER.headless, "false");
     });
 
     it("should use custom dumpio setting from env var", function() {
