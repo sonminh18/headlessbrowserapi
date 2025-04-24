@@ -11,7 +11,7 @@ COPY . ./
 RUN npm install -g puppeteer@24.7.1
 RUN npx @puppeteer/browsers install chrome-headless-shell@stable --verbose
 
-RUN npm i
+RUN npm i --ignore-scripts=true
 RUN npm run test
 
 FROM node:23-bookworm-slim as prod
@@ -36,12 +36,13 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/app/chrome-headless-shell/linux-135.0.7049.114/chrome-headless-shell-linux64/chrome-headless-shell \
     PORT=3000 \
     HOST=0.0.0.0 \
+    PHANTOMJS_PLATFORM=linux \
     BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu"
 
     # Copy application code
 COPY lib ./lib
 COPY app.js ./
-RUN npm i --omit=dev
+RUN npm i --omit=dev --ignore-scripts=true
 RUN npm cache clean --force
 
 # Expose port
