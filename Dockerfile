@@ -48,7 +48,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm install && npm cache clean --force
+RUN npm install 
+RUN npm cache clean --force
 
 # Set Chrome as default browser and configure optimization flags
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
