@@ -1,11 +1,11 @@
-const assert = require('assert');
-const config = require('../lib/util/config');
+const assert = require("assert");
+const config = require("../lib/util/config");
 const lib = require("../lib");
 
 // Set test environment variables before any tests run
 process.env.API_KEY = "test";
 
-describe('Browser Configuration', function() {
+describe("Browser Configuration", function() {
     beforeEach(async function() {
         // Clear environment variables before each test
         delete process.env.BROWSER_TYPE;
@@ -18,47 +18,47 @@ describe('Browser Configuration', function() {
         delete process.env.BROWSER_WAIT_UNTIL;
         delete process.env.BROWSER_HEADLESS;
         delete process.env.BROWSER_DUMPIO;
-        
+
         // Load config
         await config.load();
         await config.start_BROWSER();
     });
 
-    it('should use default browser configuration when no env vars are set', async function() {
-        assert.strictEqual(config.conf.BROWSER.type, 'chromium');
+    it("should use default browser configuration when no env vars are set", async function() {
+        assert.strictEqual(config.conf.BROWSER.type, "chromium");
         assert.strictEqual(config.conf.BROWSER.executablePath, null);
         assert.deepStrictEqual(config.conf.BROWSER.args, [
-            '--no-sandbox',
-            '--disable-gpu'
+            "--no-sandbox",
+            "--disable-gpu"
         ]);
         assert.strictEqual(config.conf.BROWSER.viewport.width, 1366);
         assert.strictEqual(config.conf.BROWSER.viewport.height, 768);
         assert.strictEqual(config.conf.BROWSER.viewport.deviceScaleFactor, 1);
         assert.strictEqual(config.conf.BROWSER.timeout, 60000);
-        assert.strictEqual(config.conf.BROWSER.waitUntil, 'load');
-        assert.strictEqual(config.conf.BROWSER.headless, 'false');
+        assert.strictEqual(config.conf.BROWSER.waitUntil, "load");
+        assert.strictEqual(config.conf.BROWSER.headless, "false");
         assert.strictEqual(config.conf.BROWSER.dumpio, true);
     });
 
-    it('should use custom browser type from env var', function() {
-        process.env.BROWSER_TYPE = 'firefox';
-        config.conf.BROWSER.type = 'firefox';
-        assert.strictEqual(config.conf.BROWSER.type, 'firefox');
+    it("should use custom browser type from env var", function() {
+        process.env.BROWSER_TYPE = "firefox";
+        config.conf.BROWSER.type = "firefox";
+        assert.strictEqual(config.conf.BROWSER.type, "firefox");
     });
 
-    it('should use custom executable path from env var', function() {
-        process.env.BROWSER_EXECUTABLE_PATH = '/path/to/browser';
-        config.conf.BROWSER.executablePath = '/path/to/browser';
-        assert.strictEqual(config.conf.BROWSER.executablePath, '/path/to/browser');
+    it("should use custom executable path from env var", function() {
+        process.env.BROWSER_EXECUTABLE_PATH = "/path/to/browser";
+        config.conf.BROWSER.executablePath = "/path/to/browser";
+        assert.strictEqual(config.conf.BROWSER.executablePath, "/path/to/browser");
     });
 
-    it('should parse browser args from env var', function() {
-        const customArgs = ['--disable-gpu', '--no-sandbox', '--headless'];
+    it("should parse browser args from env var", function() {
+        const customArgs = ["--disable-gpu", "--no-sandbox", "--headless"];
         config.conf.BROWSER.args = customArgs;
         assert.deepStrictEqual(config.conf.BROWSER.args, customArgs);
     });
 
-    it('should use custom viewport settings from env vars', function() {
+    it("should use custom viewport settings from env vars", function() {
         config.conf.BROWSER.viewport.width = 1920;
         config.conf.BROWSER.viewport.height = 1080;
         config.conf.BROWSER.viewport.deviceScaleFactor = 2;
@@ -67,22 +67,22 @@ describe('Browser Configuration', function() {
         assert.strictEqual(config.conf.BROWSER.viewport.deviceScaleFactor, 2);
     });
 
-    it('should use custom timeout from env var', function() {
+    it("should use custom timeout from env var", function() {
         config.conf.BROWSER.timeout = 30000;
         assert.strictEqual(config.conf.BROWSER.timeout, 30000);
     });
 
-    it('should use custom waitUntil from env var', function() {
-        config.conf.BROWSER.waitUntil = 'networkidle0';
-        assert.strictEqual(config.conf.BROWSER.waitUntil, 'networkidle0');
+    it("should use custom waitUntil from env var", function() {
+        config.conf.BROWSER.waitUntil = "networkidle0";
+        assert.strictEqual(config.conf.BROWSER.waitUntil, "networkidle0");
     });
 
-    it('should use custom headless mode from env var', function() {
-        config.conf.BROWSER.headless = 'new';
-        assert.strictEqual(config.conf.BROWSER.headless, 'new');
+    it("should use custom headless mode from env var", function() {
+        config.conf.BROWSER.headless = "new";
+        assert.strictEqual(config.conf.BROWSER.headless, "new");
     });
 
-    it('should use custom dumpio setting from env var', function() {
+    it("should use custom dumpio setting from env var", function() {
         config.conf.BROWSER.dumpio = false;
         assert.strictEqual(config.conf.BROWSER.dumpio, false);
     });
@@ -94,11 +94,11 @@ describe("Configuration", function() {
     before(async function() {
         // Ensure API_KEY is set before tests
         process.env.API_KEY = "test";
-        
+
         // Load configuration
         await config.load();
         await config.start_BROWSER();
-        
+
         // Start lib
         await lib.start();
     });
@@ -152,4 +152,4 @@ describe("Configuration", function() {
             assert.ok(engines.puppeteer.version, "puppeteer engine should have version method");
         });
     });
-}); 
+});

@@ -1,19 +1,3 @@
-// Set up chrome-headless-shell executable path if not already set
-try {
-    if (!process.env.PUPPETEER_EXECUTABLE_PATH) {
-        // Try to find the chrome-headless-shell path using @puppeteer/browsers
-        const browsers = require('@puppeteer/browsers');
-        const executablePath = browsers.computeExecutablePath({
-            browser: 'chrome-headless-shell',
-            buildId: 'stable'
-        });
-        process.env.PUPPETEER_EXECUTABLE_PATH = executablePath;
-        console.log(`Using chrome-headless-shell at: ${executablePath}`);
-    }
-} catch (err) {
-    console.log('Could not determine chrome-headless-shell path automatically:', err.message);
-}
-
 // requires the multiple libraries
 const express = require("express");
 const process = require("process");
@@ -22,6 +6,22 @@ const info = require("./package");
 const lib = require("./lib");
 const CacheManager = require("./lib/util/cache");
 const { verifyKey } = require("./lib");
+
+// Set up chrome-headless-shell executable path if not already set
+try {
+    if (!process.env.PUPPETEER_EXECUTABLE_PATH) {
+        // Try to find the chrome-headless-shell path using @puppeteer/browsers
+        const browsers = require("@puppeteer/browsers");
+        const executablePath = browsers.computeExecutablePath({
+            browser: "chrome-headless-shell",
+            buildId: "stable"
+        });
+        process.env.PUPPETEER_EXECUTABLE_PATH = executablePath;
+        console.log(`Using chrome-headless-shell at: ${executablePath}`);
+    }
+} catch (err) {
+    console.log("Could not determine chrome-headless-shell path automatically:", err.message);
+}
 
 // builds the initial application object to be used
 // by the application for serving
@@ -94,7 +94,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             customUserAgent: req.query.custom_user_agent,
             customCookies: req.query.custom_cookies ? JSON.parse(decodeURIComponent(req.query.custom_cookies)) : undefined,
             userPass: req.query.user_pass,
-            timeout: req.query.timeout ? parseInt(req.query.timeout) : undefined,
+            timeout: req.query.timeout ? parseInt(req.query.timeout, 10) : undefined,
             proxyUrl: req.query.proxy_url,
             proxyAuth: req.query.proxy_auth
         };
@@ -106,7 +106,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
         const cachedResult = await cache.get(cacheKey);
         if (cachedResult) {
             util.Logging.info(`Cache hit for ${url}`);
-            res.setHeader('X-Cache', 'HIT');
+            res.setHeader("X-Cache", "HIT");
             return res.send(cachedResult);
         }
 
@@ -134,7 +134,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             // Cache the result if not already sent
             if (!res.headersSent && res.locals.content) {
                 await cache.set(cacheKey, res.locals.content);
-                res.setHeader('X-Cache', 'MISS');
+                res.setHeader("X-Cache", "MISS");
                 res.send(res.locals.content);
             }
         } catch (error) {
@@ -193,7 +193,7 @@ app.use((err, req, res, next) => {
     
     // Use default error code of 500 if not specified
     const code = err.code || 500;
-    const result = { error: err.message, code: code };
+    const result = { error: err.message, code };
     
     // Log error details
     util.Logging.error(`Error processing request: ${err.message}`);
@@ -208,7 +208,7 @@ app.use((err, req, res, next) => {
 });
 
 // Only start the server if we're not in test mode
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== "test") {
     (async () => {
         try {
             // Load configurations and initialize
