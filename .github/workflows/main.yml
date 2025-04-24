@@ -52,12 +52,6 @@ jobs:
     - name: Install browser binaries
       run: npx @puppeteer/browsers install chrome-headless-shell@stable
 
-    - name: Set up chrome-headless-shell path
-      run: |
-        CHROME_PATH=$(node -e "console.log(require('@puppeteer/browsers').computeExecutablePath({browser: 'chrome-headless-shell', buildId: 'stable'}))")
-        echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> $GITHUB_ENV
-        echo "Using chrome-headless-shell at: $CHROME_PATH"
-
     - name: Run tests
       run: npm run test:coverage
       env:
