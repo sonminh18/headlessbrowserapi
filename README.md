@@ -1,35 +1,124 @@
-# [Headless](https://headless.hive.pt)
+# Headless Browser API
 
-Simple headless browser API to render images (PNG, JPEG, WebP, TIFF, BMP, etc.) and PDFs from plain HTML.
+A high-performance API for rendering web pages using headless browsers. This service provides endpoints to scrape web content using different browser engines like Puppeteer and PhantomJS.
 
 ## Features
 
-* Capture of webpages as PNG and PDFs
-* Multiple back-end engines: [Phantom.js](https://phantomjs.org) and [Puppeteer](https://github.com/puppeteer/puppeteer)
+- Support for multiple headless browser engines:
+  - Puppeteer (Chrome/Chromium)
+  - PhantomJS
+- Fast response times with integrated caching
+- Custom user agent, cookies, proxy, and authentication support
+- Simple REST API interface
+- Performance monitoring and benchmarking
 
-## Configuration
+## API Endpoints
 
-| Name           | Type  | Default | Description                                                                                                            |
-| -------------- | ----- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `HEADLESS_KEY` | `str` | `None`  | Secret key that should be passed in protected calls so that the server-side "trusts" the client side (authentication). |
+### Scrape Content with a Specific Engine
 
-## Docker Images
+```
+GET /apis/scrape/v1/:engine
+```
 
-Headless is available on [Docker Hub](https://hub.docker.com/r/hivesolutions/headless) with the following tags:
+Parameters:
+- `apikey` (required): Your API key for authentication
+- `url` (required): The URL to scrape
+- `custom_user_agent`: Custom user agent string
+- `custom_cookies`: URL-encoded JSON object with cookies
+- `user_pass`: Basic authentication credentials (format: `username:password`)
+- `timeout`: Timeout in milliseconds
+- `proxy_url`: Proxy server URL
+- `proxy_auth`: Proxy authentication credentials (format: `username:password`)
 
-| Tag        | Description                                        | Supported Architectures       |
-| ---------- | -------------------------------------------------- | ----------------------------- |
-| `latest`   | The most up-to-date stable version.                | `amd64`                       |
-| `debian`   | Debian-based container for stability and security. | `amd64`                       |
-| `chromium` | Container using chromium instead of chrome.        | `amd64`, `arm/v7`, `arm64/v8` |
+Example:
+```
+GET /apis/scrape/v1/puppeteer?apikey=your_api_key&url=http://example.com&timeout=5000
+```
+
+### Get API Information
+
+```
+GET /info
+```
+
+Returns information about the API, including version numbers for the API and each engine.
+
+### Health Check
+
+```
+GET /health
+```
+
+Returns a simple status check to verify the API is running.
+
+## Recent Optimizations
+
+The API has been optimized for performance, reliability, and resource usage:
+
+1. **Browser Pool Management**: Implemented an intelligent browser pool that efficiently manages browser instances and pages
+2. **Improved Caching**: Using NodeCache for better memory management and performance
+3. **Resource Filtering**: Pages now filter unnecessary resources (images, fonts) to improve page load times
+4. **Error Handling**: Enhanced error handling with proper status codes and timeouts
+5. **Memory Leaks Fixed**: Eliminated memory leaks by proper cleanup of browser resources
+6. **Request Timeouts**: Added request timeout handling to prevent hanging requests
+7. **Performance Metrics**: Added detailed performance monitoring and statistics
+8. **Browser Stability**: Improved browser launch arguments for better stability in containerized environments
+
+## Performance Benchmarks
+
+You can run performance benchmarks using:
+
+```
+npm run benchmark
+```
+
+This will test response times and throughput for different API endpoints.
+
+## Development
+
+### Prerequisites
+
+- Node.js (v16+)
+- NPM (v7+)
+
+### Setup
+
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Start the server: `npm start`
+
+For development with automatic restart:
+```
+npm run dev
+```
+
+### Environment Variables
+
+- `PORT`: Server port (default: 3000)
+- `HOST`: Server host (default: 127.0.0.1)
+- `API_KEY`: API key for authentication
+- `BROWSER_ARGS`: Additional browser arguments (comma-separated)
+- `BROWSER_EXECUTABLE_PATH`: Path to browser executable
+- `BROWSER_HEADLESS`: Set to "false" to disable headless mode
+- `BROWSER_TIMEOUT`: Default page timeout in ms
+- `BROWSER_VIEWPORT_WIDTH`: Browser viewport width
+- `BROWSER_VIEWPORT_HEIGHT`: Browser viewport height
+- `BROWSER_WAIT_UNTIL`: Page load strategy (networkidle0, networkidle2, load, domcontentloaded)
+- `BROWSER_MAX_CONCURRENCY`: Maximum concurrent browser instances
+
+### Testing
+
+Run the tests with:
+
+```
+npm test
+```
+
+For test coverage:
+```
+npm run test:coverage
+```
 
 ## License
 
-Headless is currently licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/).
-
-## Build Automation
-
-[![Build Status](https://app.travis-ci.com/hivesolutions/headless.svg?branch=master)](https://travis-ci.com/github/hivesolutions/headless)
-[![Build Status GitHub](https://github.com/hivesolutions/headless/workflows/Main%20Workflow/badge.svg)](https://github.com/hivesolutions/headless/actions)
-[![npm Status](https://img.shields.io/npm/v/hive-headless.svg)](https://www.npmjs.com/package/hive-headless)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/)
+Apache-2.0
