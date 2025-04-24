@@ -1,3 +1,19 @@
+// Set up chrome-headless-shell executable path if not already set
+try {
+    if (!process.env.PUPPETEER_EXECUTABLE_PATH) {
+        // Try to find the chrome-headless-shell path using @puppeteer/browsers
+        const browsers = require('@puppeteer/browsers');
+        const executablePath = browsers.computeExecutablePath({
+            browser: 'chrome-headless-shell',
+            buildId: 'stable'
+        });
+        process.env.PUPPETEER_EXECUTABLE_PATH = executablePath;
+        console.log(`Using chrome-headless-shell at: ${executablePath}`);
+    }
+} catch (err) {
+    console.log('Could not determine chrome-headless-shell path automatically:', err.message);
+}
+
 // requires the multiple libraries
 const express = require("express");
 const process = require("process");
