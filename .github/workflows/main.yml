@@ -49,5 +49,3 @@ jobs:
         platforms: linux/amd64,linux/arm64
         push: true
         tags: node${{ matrix.node-version }}-${{ steps.set_tag.outputs.tags }}
-        cache-from: type=registry,ref=davilson18/headlessbrowserapi:buildcache-${{ matrix.node-version }}
-        cache-to: type=registry,ref=davilson18/headlessbrowserapi:buildcache-${{ matrix.node-version }},mode=max
