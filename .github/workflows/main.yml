@@ -8,11 +8,12 @@ jobs:
     name: Build and Push Docker
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    matrix:
-      node-version:
-      - 23
-      - 20
-      - 18
+    strategy:
+      matrix:
+        node-version:
+        - 23
+        - 20
+        - 18
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -49,6 +50,6 @@ jobs:
         file: Dockerfile.node${{ matrix.node-version }}
         platforms: linux/amd64,linux/arm64
         push: true
-        tags: node${{ matrix.node-version }}
+        tags: node${{ matrix.node-version }}-${{ steps.set_tag.outputs.tags }}
         cache-from: type=registry,ref=davilson18/headlessbrowserapi:buildcache-${{ matrix.node-version }}
         cache-to: type=registry,ref=davilson18/headlessbrowserapi:buildcache-${{ matrix.node-version }},mode=max
