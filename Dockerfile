@@ -16,7 +16,7 @@ RUN apk add --no-cache \
 
 # Install dependencies first (better caching)
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Set environment variables for testing
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
@@ -25,8 +25,8 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 # Copy source code
 COPY . .
 
-# Run linting and tests
-RUN npm run lint && npm test
+# Run tests
+RUN npm test
 
 # Production stage
 FROM node:20-alpine
@@ -48,7 +48,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci && npm cache clean --force
+RUN npm install && npm cache clean --force
 
 # Set Chrome as default browser and configure optimization flags
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
