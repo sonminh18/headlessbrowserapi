@@ -56,7 +56,7 @@ jobs:
       run: npm i --verbose
 
     - name: Run tests
-      run: npm run test:coverage
+      run: npm run test
       env:
         PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
         NODE_ENV: test
