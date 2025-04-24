@@ -49,9 +49,6 @@ jobs:
     - name: Install dependencies
       run: npm i --verbose
 
-    - name: Install browser binaries
-      run: npm run install:browsers
-
     - name: Run tests
       run: npm run test:coverage
       env:

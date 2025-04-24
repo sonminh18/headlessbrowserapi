@@ -37,6 +37,7 @@
         "test:coverage": "nyc mocha --recursive --exit",
         "benchmark": "node benchmark/index.js",
         "upgrade": "npx sort-package-json && ncu -u",
+        "postinstall": "npx @puppeteer/browsers install chrome-headless-shell@stable",
         "install:browsers": "npx @puppeteer/browsers install chrome-headless-shell@stable"
     },
     "dependencies": {

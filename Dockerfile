@@ -22,7 +22,6 @@ COPY app.js ./
 
 # Install production dependencies only
 RUN npm i --omit=dev --verbose
-RUN npm run install:browsers
 RUN npm cache clean --force
 
 # Set Chrome as default browser and configure optimization flags
