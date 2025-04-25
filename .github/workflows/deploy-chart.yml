@@ -1,0 +1,53 @@
+name: Deploy Helm Charts to Docker Hub
+
+on:
+  push:
+    branches:
+      - 'master'
+    paths:
+      - 'charts/**'
+      - '.github/workflows/deploy-chart.yml'
+
+env:
+  DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+  DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.12.0'
+
+      - name: Configure Docker Hub credentials
+        run: |
+          echo "${{ secrets.DOCKER_HUB_TOKEN }}" | helm registry login registry-1.docker.io -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
+
+      - name: Find and Package All Charts
+        run: |
+          # Find all Chart.yaml files in the charts directory
+          find charts -name Chart.yaml | while read chart_file; do
+            # Get the chart directory
+            CHART_DIR=$(dirname "$chart_file")
+            CHART_NAME=$(basename "$CHART_DIR")
+            
+            # Extract chart version
+            VERSION=$(grep -E '^version:' "$chart_file" | awk '{print $2}' | tr -d '"')
+            
+            echo "Processing chart: $CHART_NAME (version: $VERSION)"
+            
+            # Package the chart
+            helm package "$CHART_DIR"
+            
+            # Push to Docker Hub as OCI artifact
+            helm push "${CHART_NAME}-${VERSION}.tgz" oci://registry-1.docker.io/${{ env.DOCKER_HUB_USERNAME }}
+            
+            echo "Helm chart pushed to: oci://registry-1.docker.io/${{ env.DOCKER_HUB_USERNAME }}/$CHART_NAME:$VERSION"
+            echo "To install, run: helm install $CHART_NAME oci://registry-1.docker.io/${{ env.DOCKER_HUB_USERNAME }}/$CHART_NAME --version $VERSION"
+            echo "-----------------------------------"
+          done
