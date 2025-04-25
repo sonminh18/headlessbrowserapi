@@ -3,7 +3,7 @@ name: Deploy Helm Charts to Docker Hub
 on:
   push:
     branches:
-      - 'master'
+      - 'main'
     paths:
       - 'charts/**'
       - '.github/workflows/deploy-chart.yml'
