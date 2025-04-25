@@ -112,12 +112,18 @@ const validateScrapeRequest = (req, res, next) => {
         
         // Get the appropriate engine
         const { engine } = req.params;
-        const engineModule = lib.ENGINES[engine];
-        if (!engineModule) {
-            return res.status(400).json({ error: `Unsupported engine: ${engine}`, code: 400 });
+        
+        // Only support puppeteer engine now
+        if (engine !== 'puppeteer') {
+            return res.status(400).json({ 
+                error: `Unsupported engine: ${engine}`, 
+                code: 400,
+                message: "Only puppeteer engine is supported",
+                available_engines: ["puppeteer"]
+            });
         }
         
-        // Store engine in request for later use
+        const engineModule = lib.ENGINES.puppeteer;
         req.engineModule = engineModule;
         
         next();
@@ -193,28 +199,32 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
 // Info endpoint
 app.get("/info", async (req, res, next) => {
     try {
-        const engineVersionPromises = Object.entries(lib.ENGINES).map(async ([name, module]) => {
-            try {
-                const version = await module.singleton().version();
-                return { name, version };
-            } catch (err) {
-                return { name, version: "unknown" };
-            }
-        });
-        
-        const engineVersions = await Promise.all(engineVersionPromises);
+        const version = await lib.ENGINES.puppeteer.singleton().version();
         
         res.json({
             name: info.name,
             version: info.version,
             node: process.version,
-            engines: engineVersions.reduce((acc, { name, version }) => {
-                acc[name] = version;
-                return acc;
-            }, {})
+            engines: {
+                puppeteer: {
+                    version: version,
+                    status: "available"
+                }
+            }
         });
     } catch (error) {
-        next(error);
+        res.json({
+            name: info.name,
+            version: info.version,
+            node: process.version,
+            engines: {
+                puppeteer: {
+                    version: "unknown",
+                    status: "error",
+                    error: error.message
+                }
+            }
+        });
     }
 });
 

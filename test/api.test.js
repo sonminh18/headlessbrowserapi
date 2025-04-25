@@ -49,7 +49,7 @@ describe("API Endpoints", function() {
         context("Validation Tests", function() {
             it("should require API key", async function() {
                 const response = await request(app)
-                    .get("/apis/scrape/v1/phantom")
+                    .get("/apis/scrape/v1/puppeteer")
                     .query({ url: "http://example.com" });
 
                 assert.strictEqual(response.status, 400);
@@ -58,7 +58,7 @@ describe("API Endpoints", function() {
 
             it("should require URL", async function() {
                 const response = await request(app)
-                    .get("/apis/scrape/v1/phantom")
+                    .get("/apis/scrape/v1/puppeteer")
                     .query({ apikey: "test" });
 
                 assert.strictEqual(response.status, 400);
@@ -76,10 +76,8 @@ describe("API Endpoints", function() {
                 assert.strictEqual(response.status, 400);
                 assert.ok(response.body.error.includes("Unsupported engine"));
             });
-        });
-
-        context("Phantom Engine Tests", function() {
-            it("should scrape content with default options", async function() {
+            
+            it("should reject phantom engine", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/phantom")
                     .query({
@@ -87,75 +85,9 @@ describe("API Endpoints", function() {
                         url: "http://example.com"
                     });
 
-                assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
-            });
-
-            it("should handle custom user agent", async function() {
-                const response = await request(app)
-                    .get("/apis/scrape/v1/phantom")
-                    .query({
-                        apikey: "test",
-                        url: "http://example.com",
-                        custom_user_agent: "Test-Agent/1.0"
-                    });
-
-                assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
-            });
-
-            it("should handle custom timeout", async function() {
-                const response = await request(app)
-                    .get("/apis/scrape/v1/phantom")
-                    .query({
-                        apikey: "test",
-                        url: "http://example.com",
-                        timeout: "5000"
-                    });
-
-                assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
-            });
-
-            it("should handle custom cookies", async function() {
-                const cookies = { sessionId: "abc123", user: "testuser" };
-                const response = await request(app)
-                    .get("/apis/scrape/v1/phantom")
-                    .query({
-                        apikey: "test",
-                        url: "http://example.com",
-                        custom_cookies: encodeURIComponent(JSON.stringify(cookies))
-                    });
-
-                assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
-            });
-
-            it("should handle proxy settings", async function() {
-                const response = await request(app)
-                    .get("/apis/scrape/v1/phantom")
-                    .query({
-                        apikey: "test",
-                        url: "http://example.com",
-                        proxy_url: "http://proxy.example.com:8080",
-                        proxy_auth: "user:pass"
-                    });
-
-                assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
-            });
-
-            it("should handle basic authentication", async function() {
-                const response = await request(app)
-                    .get("/apis/scrape/v1/phantom")
-                    .query({
-                        apikey: "test",
-                        url: "http://example.com",
-                        user_pass: "username:password"
-                    });
-
-                assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.strictEqual(response.status, 400);
+                assert.ok(response.body.error.includes("Unsupported engine"));
+                assert.strictEqual(response.body.message, "Only puppeteer engine is supported");
             });
         });
         
@@ -246,23 +178,25 @@ describe("API Endpoints", function() {
                 const uniqueUrl = `http://example.com?nocache=${Date.now()}`;
 
                 const response1 = await request(app)
-                    .get("/apis/scrape/v1/phantom")
+                    .get("/apis/scrape/v1/puppeteer")
                     .query({
                         apikey: "test",
                         url: uniqueUrl
                     });
 
                 assert.strictEqual(response1.status, 200);
+                assert.strictEqual(response1.headers["x-cache"], "MISS");
 
                 // Second request should be cached
                 const response2 = await request(app)
-                    .get("/apis/scrape/v1/phantom")
+                    .get("/apis/scrape/v1/puppeteer")
                     .query({
                         apikey: "test",
                         url: uniqueUrl
                     });
 
                 assert.strictEqual(response2.status, 200);
+                assert.strictEqual(response2.headers["x-cache"], "HIT");
             });
         });
 
@@ -272,7 +206,7 @@ describe("API Endpoints", function() {
 
             it("should handle invalid URL format errors", async function() {
                 const response = await request(app)
-                    .get("/apis/scrape/v1/phantom")
+                    .get("/apis/scrape/v1/puppeteer")
                     .query({
                         apikey: "test",
                         url: "invalid-url"
@@ -286,7 +220,7 @@ describe("API Endpoints", function() {
             // Skip these tests for now as they're causing timeouts
             it.skip("should handle 404 page not found errors", async function() {
                 const response = await request(app)
-                    .get("/apis/scrape/v1/phantom")
+                    .get("/apis/scrape/v1/puppeteer")
                     .query({
                         apikey: "test",
                         url: "http://notfound.example.com"
@@ -299,7 +233,7 @@ describe("API Endpoints", function() {
 
             it.skip("should handle server errors", async function() {
                 const response = await request(app)
-                    .get("/apis/scrape/v1/phantom")
+                    .get("/apis/scrape/v1/puppeteer")
                     .query({
                         apikey: "test",
                         url: "http://error.example.com"
@@ -313,12 +247,15 @@ describe("API Endpoints", function() {
     });
 
     describe("GET /info", function() {
-        it("should return version information", async function() {
+        it("should return version information with puppeteer engine only", async function() {
             const response = await request(app).get("/info");
             assert.strictEqual(response.status, 200);
             assert.ok(response.body.name);
             assert.ok(response.body.version);
             assert.ok(response.body.node);
+            
+            // Verify that puppeteer is the only available engine
+            assert.ok(response.body.engines.puppeteer);
         });
     });
 

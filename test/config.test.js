@@ -142,7 +142,6 @@ describe("Configuration", function() {
         it("should have required engines configured", function() {
             const engines = lib.ENGINES;
             assert.ok(engines.puppeteer, "Puppeteer engine should be configured");
-            assert.ok(engines.phantom, "Phantom engine should be configured");
         });
 
         it("should have valid engine configurations", function() {
