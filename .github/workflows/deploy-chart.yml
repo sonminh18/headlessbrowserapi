@@ -24,12 +24,10 @@ jobs:
         with:
           version: '3.12.0'
 
-      - name: Configure Docker Hub credentials
-        run: |
-          echo "${{ secrets.DOCKER_HUB_TOKEN }}" | helm registry login registry-1.docker.io -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
 
       - name: Find and Package All Charts
         run: |
+          echo "${{ secrets.DOCKER_HUB_TOKEN }}" | helm registry login registry-1.docker.io -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
           # Find all Chart.yaml files in the charts directory
           find charts -name Chart.yaml | while read chart_file; do
             # Get the chart directory
