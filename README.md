@@ -6,7 +6,6 @@ A high-performance API for rendering web pages using headless browsers. This ser
 
 - Support for multiple headless browser engines:
   - Puppeteer (Chrome/Chromium)
-  - PhantomJS
 - Fast response times with integrated caching
 - Custom user agent, cookies, proxy, and authentication support
 - Simple REST API interface
