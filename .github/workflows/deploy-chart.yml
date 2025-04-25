@@ -43,9 +43,9 @@ jobs:
             helm package "$CHART_DIR"
             
             # Push to Docker Hub as OCI artifact
-            helm push "${CHART_NAME}-${VERSION}.tgz" oci://registry-1.docker.io/${{ env.DOCKER_HUB_USERNAME }}
+            helm push "${CHART_NAME}-${VERSION}.tgz" oci://registry-1.docker.io/headlessbrowserapi
             
-            echo "Helm chart pushed to: oci://registry-1.docker.io/${{ env.DOCKER_HUB_USERNAME }}/$CHART_NAME:$VERSION"
-            echo "To install, run: helm install $CHART_NAME oci://registry-1.docker.io/${{ env.DOCKER_HUB_USERNAME }}/$CHART_NAME --version $VERSION"
+            echo "Helm chart pushed to: oci://registry-1.docker.io/headlessbrowserapi/$CHART_NAME:$VERSION"
+            echo "To install, run: helm install $CHART_NAME oci://registry-1.docker.io/headlessbrowserapi/$CHART_NAME --version $VERSION"
             echo "-----------------------------------"
           done
