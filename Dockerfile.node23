@@ -46,7 +46,10 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/app/chrome-headless-shell/linux-135.0.7049.114/chrome-headless-shell-linux64/chrome-headless-shell \
     PORT=3000 \
     HOST=0.0.0.0 \
-    BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu"
+    BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-extensions,--js-flags=--expose-gc --max-old-space-size=512,--disable-background-networking" \
+    BROWSER_MAX_CONCURRENCY=3 \
+    BROWSER_MAX_PAGES_PER_BROWSER=30 \
+    BROWSER_TTL=1800000
 
 # Copy application code
 COPY lib ./lib
