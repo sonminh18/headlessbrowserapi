@@ -75,7 +75,7 @@ const validateScrapeRequest = (req, res, next) => {
         }
         
         // Validate timeout (must be a number)
-        if (req.query.timeout) {
+        if (req.query.timeout && req.query.timeout !== 'default') {
             const timeout = parseInt(req.query.timeout, 10);
             if (isNaN(timeout) || timeout <= 0) {
                 return res.status(400).json({ error: "Timeout must be a positive number", code: 400 });
@@ -83,7 +83,7 @@ const validateScrapeRequest = (req, res, next) => {
         }
         
         // Validate custom cookies format if provided
-        if (req.query.custom_cookies) {
+        if (req.query.custom_cookies && req.query.custom_cookies !== 'default') {
             try {
                 JSON.parse(decodeURIComponent(req.query.custom_cookies));
             } catch (error) {
@@ -92,7 +92,7 @@ const validateScrapeRequest = (req, res, next) => {
         }
         
         // Validate proxy_url if provided
-        if (req.query.proxy_url) {
+        if (req.query.proxy_url && req.query.proxy_url !== 'default') {
             try {
                 new URL(req.query.proxy_url);
             } catch (error) {
@@ -101,12 +101,12 @@ const validateScrapeRequest = (req, res, next) => {
         }
         
         // Validate user_pass format if provided (should be username:password)
-        if (req.query.user_pass && !req.query.user_pass.includes(':')) {
+        if (req.query.user_pass && req.query.user_pass !== 'default' && !req.query.user_pass.includes(':')) {
             return res.status(400).json({ error: "Invalid user_pass format. Must be 'username:password'", code: 400 });
         }
         
         // Validate proxy_auth format if provided (should be username:password)
-        if (req.query.proxy_auth && !req.query.proxy_auth.includes(':')) {
+        if (req.query.proxy_auth && req.query.proxy_auth !== 'default' && !req.query.proxy_auth.includes(':')) {
             return res.status(400).json({ error: "Invalid proxy_auth format. Must be 'username:password'", code: 400 });
         }
         
@@ -141,12 +141,16 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
         // Create a clean options object from query parameters
         const options = {
             url,
-            customUserAgent: req.query.custom_user_agent,
-            customCookies: req.query.custom_cookies ? JSON.parse(decodeURIComponent(req.query.custom_cookies)) : undefined,
-            userPass: req.query.user_pass,
-            timeout: req.query.timeout ? parseInt(req.query.timeout, 10) : undefined,
-            proxyUrl: req.query.proxy_url,
-            proxyAuth: req.query.proxy_auth
+            customUserAgent: req.query.custom_user_agent !== 'default' ? req.query.custom_user_agent : undefined,
+            customCookies: req.query.custom_cookies && req.query.custom_cookies !== 'default' 
+                ? JSON.parse(decodeURIComponent(req.query.custom_cookies)) 
+                : undefined,
+            userPass: req.query.user_pass !== 'default' ? req.query.user_pass : undefined,
+            timeout: req.query.timeout && req.query.timeout !== 'default' 
+                ? parseInt(req.query.timeout, 10) 
+                : undefined,
+            proxyUrl: req.query.proxy_url !== 'default' ? req.query.proxy_url : undefined,
+            proxyAuth: req.query.proxy_auth !== 'default' ? req.query.proxy_auth : undefined
         };
 
         // Create a unique cache key based on URL and relevant options

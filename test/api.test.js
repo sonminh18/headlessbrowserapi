@@ -65,6 +65,20 @@ describe("API Endpoints", function() {
                 assert.ok(response.body.error.includes("URL is required"));
             });
 
+            it("should still validate parameters when mixing 'default' and real values", async function() {
+                const response = await request(app)
+                    .get("/apis/scrape/v1/puppeteer")
+                    .query({
+                        apikey: "test",
+                        url: "http://example.com",
+                        custom_cookies: "default",
+                        timeout: "-100" // Invalid timeout
+                    });
+
+                assert.strictEqual(response.status, 400);
+                assert.ok(response.body.error.includes("Timeout must be a positive number"));
+            });
+
             it("should validate engine name", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/invalid-engine")
@@ -98,6 +112,24 @@ describe("API Endpoints", function() {
                     .query({
                         apikey: "test",
                         url: "http://example.com"
+                    });
+
+                assert.strictEqual(response.status, 200);
+                assert.ok(response.text.includes("Example Domain"));
+            });
+
+            it("should handle 'default' parameter values", async function() {
+                const response = await request(app)
+                    .get("/apis/scrape/v1/puppeteer")
+                    .query({
+                        apikey: "test",
+                        url: "http://example.com",
+                        custom_user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+                        custom_cookies: "default",
+                        user_pass: "default",
+                        timeout: "default",
+                        proxy_url: "default",
+                        proxy_auth: "default"
                     });
 
                 assert.strictEqual(response.status, 200);
