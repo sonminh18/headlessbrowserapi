@@ -20,7 +20,7 @@ describe("API Endpoints", function() {
         // Mock external requests
         nock("http://example.com")
             .persist()
-            .get(/.*/)
+            .get(/^\/(?!.*\.jpg)(?!.*\.png).*$/) // Don't match jpg or png files
             .reply(200, "<html><head><title>Example Domain</title></head><body><h1>Example Domain</h1></body></html>");
 
         // Mock 404 response
@@ -370,15 +370,9 @@ describe("API Endpoints", function() {
                 assert.ok(response.text.includes("Example Domain"));
             });
             
-            it("should detect and handle image URLs", async function() {
-                // Mock an image response
-                const imageUrl = "https://6f4ca29d-86bd-4f72-8fb6-41e32da324c5.mdnplay.dev/shared-assets/images/examples/grapefruit-slice.jpg";
-                
-                nock("https://6f4ca29d-86bd-4f72-8fb6-41e32da324c5.mdnplay.dev")
-                    .get("/shared-assets/images/examples/grapefruit-slice.jpg")
-                    .reply(200, Buffer.from([0xff, 0xd8, 0xff]), { // JPEG header
-                        'Content-Type': 'image/jpeg'
-                    });
+            it("should detect and handle image URLs and return base64 data", async function() {
+                // Use a real image URL from Wikipedia
+                const imageUrl = "https://upload.wikimedia.org/wikipedia/en/a/a9/Example.jpg";
                     
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
@@ -388,7 +382,45 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                // Can't reliably test image content in this mocked environment
+                
+                // Check that the response is base64 encoded data
+                // Base64 should only contain a-z, A-Z, 0-9, +, /, and = characters
+                const isBase64 = /^[A-Za-z0-9+/=]+$/.test(response.text);
+                assert.ok(isBase64, "Response should be base64 encoded data without data URI prefix");
+                
+            });
+            
+            it("should handle different image formats (PNG) and return base64 data", async function() {
+                // Mock a PNG image response
+                const pngUrl = "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png";
+                
+                // Create a small valid PNG buffer for testing
+                const pngHeader = Buffer.from([
+                    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+                    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01
+                ]);
+                
+                // Mock the Wikipedia URL
+                nock("https://upload.wikimedia.org")
+                    .get("/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png")
+                    .reply(200, pngHeader, { 
+                        'Content-Type': 'image/png'
+                    });
+                    
+                const response = await request(app)
+                    .get("/apis/scrape/v1/puppeteer")
+                    .query({
+                        apikey: "test",
+                        url: pngUrl,
+                        delay: "100" // Add a small delay to test that parameter works with images too
+                    });
+
+                assert.strictEqual(response.status, 200);
+                
+                // Check that the response is base64 encoded data
+                const isBase64 = /^[A-Za-z0-9+/=]+$/.test(response.text);
+                assert.ok(isBase64, "Response should be base64 encoded data");
+                
             });
         });
 
