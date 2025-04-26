@@ -56,12 +56,13 @@ The API has been optimized for performance, reliability, and resource usage:
 
 1. **Browser Pool Management**: Implemented an intelligent browser pool that efficiently manages browser instances and pages
 2. **Improved Caching**: Using NodeCache for better memory management and performance
-3. **Resource Filtering**: Pages now filter unnecessary resources (images, fonts) to improve page load times
-4. **Error Handling**: Enhanced error handling with proper status codes and timeouts
-5. **Memory Leaks Fixed**: Eliminated memory leaks by proper cleanup of browser resources
-6. **Request Timeouts**: Added request timeout handling to prevent hanging requests
-7. **Performance Metrics**: Added detailed performance monitoring and statistics
-8. **Browser Stability**: Improved browser launch arguments for better stability in containerized environments
+3. **Enhanced Media Support**: Configured to load all images and media content while blocking fonts and JavaScript resources
+4. **Resource Filtering**: Smart resource management for better performance
+5. **Error Handling**: Enhanced error handling with proper status codes and timeouts
+6. **Memory Leaks Fixed**: Eliminated memory leaks by proper cleanup of browser resources
+7. **Request Timeouts**: Added request timeout handling to prevent hanging requests
+8. **Performance Metrics**: Added detailed performance monitoring and statistics
+9. **Browser Stability**: Improved browser launch arguments for better stability in containerized environments
 
 ## Performance Benchmarks
 
@@ -109,8 +110,7 @@ npm run dev
 
 Run the tests with:
 
-```
-npm test
+```npm test
 ```
 
 For test coverage:
@@ -121,4 +121,5 @@ npm run test:coverage
 ## License
 
 Apache-2.0
+
 
