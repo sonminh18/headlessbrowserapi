@@ -10,6 +10,7 @@ A high-performance API for rendering web pages using headless browsers. This ser
 - Custom user agent, cookies, proxy, and authentication support
 - JavaScript and CSS cleanup for cleaner output
 - Image handling and base64 encoding
+- Automatic video URL detection and direct return in the `html` field
 - Local storage manipulation
 - Custom JavaScript evaluation
 - Delay capabilities for dynamic content
@@ -42,9 +43,16 @@ Parameters:
 Response Format:
 ```json
 {
-  "html": "...", // The scraped HTML content from the target URL
+  "html": "...", // HTML content from target URL or direct video URL if video detected
   "apicalls": 1000, // The configured API calls limit 
   "url": "...", // The URL that was scraped
+  "videoUrls": [ // Optional - present only if videos were detected
+    {
+      "url": "...", // URL of the video file
+      "mimeType": "video/mp4", // MIME type of the video
+      "size": 12345 // Size in bytes
+    }
+  ],
   "error": "..." // Optional - present only if there was an error
 }
 ```
@@ -87,6 +95,16 @@ GET /health
 
 Returns a simple status check to verify the API is running.
 
+## Video Detection
+
+When a video is detected during page loading:
+1. The first detected video URL is returned directly in the `html` field of the response
+2. All detected video URLs are included in the `videoUrls` array
+3. No additional parameters are needed to activate this behavior
+4. For image URLs, the original image content is returned instead
+
+This makes it simple to directly use the returned URL in media players or downloaders without additional processing.
+
 ## Recent Optimizations
 
 The API has been optimized for performance, reliability, and resource usage:
@@ -100,6 +118,7 @@ The API has been optimized for performance, reliability, and resource usage:
 7. **Request Timeouts**: Added request timeout handling to prevent hanging requests
 8. **Performance Metrics**: Added detailed performance monitoring and statistics
 9. **Browser Stability**: Improved browser launch arguments for better stability in containerized environments
+10. **Direct Video URL Return**: Added automatic detection of video URLs and direct return in the response
 
 ## Performance Benchmarks
 

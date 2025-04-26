@@ -44,6 +44,28 @@ process.on("exit", () => {
     util.Logging.info("Exiting on user's request");
 });
 
+/**
+ * Helper function to check if a URL is an image
+ * @param {string} url - The URL to check
+ * @returns {boolean} True if the URL points to an image
+ */
+const isImageUrl = (url) => {
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.jpe', '.webp'];
+    const lowercasedUrl = url.toLowerCase().split('?')[0].split('#')[0];
+    return imageExtensions.some((extension) => lowercasedUrl.endsWith(extension));
+};
+
+/**
+ * Helper function to check if a URL is a video
+ * @param {string} url - The URL to check
+ * @returns {boolean} True if the URL points to a video
+ */
+const isVideoUrl = (url) => {
+    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.wmv', '.flv', '.mkv', '.m4v', '.mpeg', '.mpg'];
+    const lowercasedUrl = url.toLowerCase().split('?')[0].split('#')[0];
+    return videoExtensions.some((extension) => lowercasedUrl.endsWith(extension));
+};
+
 // Request validation middleware
 const validateScrapeRequest = (req, res, next) => {
     try {
@@ -278,12 +300,28 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             util.Logging.info(`Cache hit for ${url}`);
             res.setHeader("X-Cache", "HIT");
             
-            // Format response according to the example
+            // Create response with HTML content
+            let responseHtml = cachedResult.html;
+            
+            // If video URLs are present and we should return the URL directly
+            if (cachedResult.videoUrls && cachedResult.videoUrls.length > 0) {
+                // Return first video URL in html field if requested URL is not an image
+                if (!isImageUrl(url)) {
+                    responseHtml = cachedResult.videoUrls[0].url;
+                }
+            }
+            
+            // Format response
             const response = {
-                html: cachedResult,
+                html: responseHtml,
                 apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                 url: url
             };
+            
+            // Still include the full videoUrls array for reference
+            if (cachedResult.videoUrls && cachedResult.videoUrls.length > 0) {
+                response.videoUrls = cachedResult.videoUrls;
+            }
             
             return res.json(response);
         }
@@ -311,15 +349,40 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             
             // Cache the result if not already sent
             if (!res.headersSent && res.locals.content) {
-                await cache.set(cacheKey, res.locals.content);
+                // Create cache object including videos if present
+                const cacheObject = {
+                    html: res.locals.content
+                };
+                
+                if (res.locals.videoUrls && res.locals.videoUrls.length > 0) {
+                    cacheObject.videoUrls = res.locals.videoUrls;
+                }
+                
+                await cache.set(cacheKey, cacheObject);
                 res.setHeader("X-Cache", "MISS");
                 
-                // Format response according to the example
+                // Get HTML content or video URL
+                let responseHtml = res.locals.content;
+                
+                // If video URLs are present and we should return the URL directly
+                if (res.locals.videoUrls && res.locals.videoUrls.length > 0) {
+                    // Return first video URL in html field if requested URL is not an image
+                    if (!isImageUrl(url)) {
+                        responseHtml = res.locals.videoUrls[0].url;
+                    }
+                }
+                
+                // Format response
                 const response = {
-                    html: res.locals.content,
+                    html: responseHtml,
                     apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                     url: url
                 };
+                
+                // Still include the full videoUrls array for reference
+                if (res.locals.videoUrls && res.locals.videoUrls.length > 0) {
+                    response.videoUrls = res.locals.videoUrls;
+                }
                 
                 res.json(response);
                 // Done Process the request
@@ -435,3 +498,7 @@ if (process.env.NODE_ENV !== "test") {
 }
 
 module.exports = app;
+
+// Export utility functions for testing
+module.exports.isImageUrl = isImageUrl;
+module.exports.isVideoUrl = isVideoUrl;

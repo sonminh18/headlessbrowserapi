@@ -33,6 +33,7 @@
         "pretty": "npm run prettier && npm run lint-fix",
         "start": "node app.js",
         "test": "mocha --recursive --exit",
+        "test:video": "mocha test/video-detection.test.js --exit",
         "test:watch": "mocha --recursive --watch",
         "test:coverage": "nyc mocha --recursive --exit",
         "benchmark": "node benchmark/index.js",
