@@ -39,6 +39,16 @@ Parameters:
 - `localstorage`: Local storage items to set in format "key=value;key2=value2"
 - `eval`: Custom JavaScript to evaluate on the page (URL-encoded)
 
+Response Format:
+```json
+{
+  "html": "...", // The scraped HTML content from the target URL
+  "apicalls": 1000, // The configured API calls limit 
+  "url": "...", // The URL that was scraped
+  "error": "..." // Optional - present only if there was an error
+}
+```
+
 Examples:
 
 Basic scraping:
@@ -124,6 +134,7 @@ npm run dev
 - `PORT`: Server port (default: 3000)
 - `HOST`: Server host (default: 127.0.0.1)
 - `API_KEY`: API key for authentication
+- `API_CALLS_LIMIT`: Maximum API calls allowed (returned in response, default: 1000)
 - `BROWSER_ARGS`: Additional browser arguments (comma-separated)
 - `BROWSER_EXECUTABLE_PATH`: Path to browser executable
 - `BROWSER_HEADLESS`: Set to "false" to disable headless mode

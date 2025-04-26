@@ -52,17 +52,32 @@ const validateScrapeRequest = (req, res, next) => {
         
         // Validate required parameters
         if (!apikey) {
-            return res.status(400).json({ error: "API key is required", code: 400 });
+            return res.status(400).json({ 
+                html: "API key is required", 
+                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                url: req.originalUrl || req.url,
+                error: "API key is required" 
+            });
         }
         if (!url) {
-            return res.status(400).json({ error: "URL is required", code: 400 });
+            return res.status(400).json({ 
+                html: "URL is required", 
+                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                url: req.originalUrl || req.url,
+                error: "URL is required" 
+            });
         }
         
         // Validate URL format
         try {
             new URL(url);
         } catch (error) {
-            return res.status(400).json({ error: "Invalid URL format", code: 400 });
+            return res.status(400).json({ 
+                html: "Invalid URL format", 
+                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                url: req.originalUrl || req.url,
+                error: "Invalid URL format" 
+            });
         }
         
         // Set the API key in the request for verification
@@ -71,14 +86,24 @@ const validateScrapeRequest = (req, res, next) => {
         try {
             verifyKey(req);
         } catch (error) {
-            return res.status(400).json({ error: error.message, code: 400 });
+            return res.status(400).json({ 
+                html: error.message, 
+                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                url: req.originalUrl || req.url,
+                error: error.message 
+            });
         }
         
         // Validate timeout (must be a number)
         if (req.query.timeout && req.query.timeout !== 'default') {
             const timeout = parseInt(req.query.timeout, 10);
             if (isNaN(timeout) || timeout <= 0) {
-                return res.status(400).json({ error: "Timeout must be a positive number", code: 400 });
+                return res.status(400).json({ 
+                    html: "Timeout must be a positive number", 
+                    apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                    url: req.originalUrl || req.url,
+                    error: "Timeout must be a positive number" 
+                });
             }
         }
         
@@ -91,9 +116,12 @@ const validateScrapeRequest = (req, res, next) => {
                 // If it's not valid JSON, assume it's a cookie string format
                 // Cookie strings should be in format: name=value;name2=value2
                 if (!req.query.custom_cookies.includes('=')) {
+                    const errorMsg = "Invalid custom_cookies format. Must be URL-encoded JSON or a string in format 'name=value;name2=value2'";
                     return res.status(400).json({ 
-                        error: "Invalid custom_cookies format. Must be URL-encoded JSON or a string in format 'name=value;name2=value2'", 
-                        code: 400 
+                        html: errorMsg, 
+                        apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                        url: req.originalUrl || req.url,
+                        error: errorMsg
                     });
                 }
             }
@@ -104,36 +132,66 @@ const validateScrapeRequest = (req, res, next) => {
             try {
                 new URL(req.query.proxy_url);
             } catch (error) {
-                return res.status(400).json({ error: "Invalid proxy_url format", code: 400 });
+                return res.status(400).json({ 
+                    html: "Invalid proxy_url format", 
+                    apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                    url: req.originalUrl || req.url,
+                    error: "Invalid proxy_url format" 
+                });
             }
         }
         
         // Validate user_pass format if provided (should be username:password)
         if (req.query.user_pass && req.query.user_pass !== 'default' && !req.query.user_pass.includes(':')) {
-            return res.status(400).json({ error: "Invalid user_pass format. Must be 'username:password'", code: 400 });
+            return res.status(400).json({ 
+                html: "Invalid user_pass format. Must be 'username:password'", 
+                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                url: req.originalUrl || req.url,
+                error: "Invalid user_pass format. Must be 'username:password'" 
+            });
         }
         
         // Validate proxy_auth format if provided (should be username:password)
         if (req.query.proxy_auth && req.query.proxy_auth !== 'default' && !req.query.proxy_auth.includes(':')) {
-            return res.status(400).json({ error: "Invalid proxy_auth format. Must be 'username:password'", code: 400 });
+            return res.status(400).json({ 
+                html: "Invalid proxy_auth format. Must be 'username:password'", 
+                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                url: req.originalUrl || req.url,
+                error: "Invalid proxy_auth format. Must be 'username:password'" 
+            });
         }
         
         // Validate cleanup parameter if provided
         if (req.query.cleanup && req.query.cleanup !== 'true' && req.query.cleanup !== 'false') {
-            return res.status(400).json({ error: "Invalid cleanup value. Must be 'true' or 'false'", code: 400 });
+            return res.status(400).json({ 
+                html: "Invalid cleanup value. Must be 'true' or 'false'", 
+                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                url: req.originalUrl || req.url,
+                error: "Invalid cleanup value. Must be 'true' or 'false'" 
+            });
         }
         
         // Validate delay parameter (must be a number)
         if (req.query.delay && req.query.delay !== 'default') {
             const delay = parseInt(req.query.delay, 10);
             if (isNaN(delay) || delay < 0) {
-                return res.status(400).json({ error: "Delay must be a non-negative number", code: 400 });
+                return res.status(400).json({ 
+                    html: "Delay must be a non-negative number", 
+                    apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                    url: req.originalUrl || req.url,
+                    error: "Delay must be a non-negative number" 
+                });
             }
         }
         
         // Validate basic_auth format if provided (should be username:password)
         if (req.query.basic_auth && req.query.basic_auth !== 'default' && !req.query.basic_auth.includes(':')) {
-            return res.status(400).json({ error: "Invalid basic_auth format. Must be 'username:password'", code: 400 });
+            return res.status(400).json({ 
+                html: "Invalid basic_auth format. Must be 'username:password'", 
+                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                url: req.originalUrl || req.url,
+                error: "Invalid basic_auth format. Must be 'username:password'" 
+            });
         }
         
         // Validate eval parameter if provided (must be URL-encoded)
@@ -141,7 +199,12 @@ const validateScrapeRequest = (req, res, next) => {
             try {
                 decodeURIComponent(req.query.eval);
             } catch (error) {
-                return res.status(400).json({ error: "Invalid eval parameter. Must be URL-encoded JavaScript", code: 400 });
+                return res.status(400).json({ 
+                    html: "Invalid eval parameter. Must be URL-encoded JavaScript", 
+                    apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                    url: req.originalUrl || req.url,
+                    error: "Invalid eval parameter. Must be URL-encoded JavaScript" 
+                });
             }
         }
         
@@ -150,11 +213,12 @@ const validateScrapeRequest = (req, res, next) => {
         
         // Only support puppeteer engine now
         if (engine !== 'puppeteer') {
+            const errorMsg = `Unsupported engine: ${engine}. Only puppeteer engine is supported`;
             return res.status(400).json({ 
-                error: `Unsupported engine: ${engine}`, 
-                code: 400,
-                message: "Only puppeteer engine is supported",
-                available_engines: ["puppeteer"]
+                html: errorMsg, 
+                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                url: req.originalUrl || req.url,
+                error: errorMsg
             });
         }
         
@@ -213,7 +277,15 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
         if (cachedResult) {
             util.Logging.info(`Cache hit for ${url}`);
             res.setHeader("X-Cache", "HIT");
-            return res.send(cachedResult);
+            
+            // Format response according to the example
+            const response = {
+                html: cachedResult,
+                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                url: url
+            };
+            
+            return res.json(response);
         }
 
         // Process the request
@@ -241,7 +313,15 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             if (!res.headersSent && res.locals.content) {
                 await cache.set(cacheKey, res.locals.content);
                 res.setHeader("X-Cache", "MISS");
-                res.send(res.locals.content);
+                
+                // Format response according to the example
+                const response = {
+                    html: res.locals.content,
+                    apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                    url: url
+                };
+                
+                res.json(response);
             }
         } catch (error) {
             clearTimeout(timeoutId);
@@ -292,7 +372,12 @@ app.get("/health", (req, res) => {
 // 404 handler
 app.all("*", (req, res) => {
     res.status(404);
-    res.json({ error: "Route not found", code: 404 });
+    res.json({
+        html: "Not found",
+        apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+        url: req.originalUrl,
+        error: "Route not found"
+    });
 });
 
 // Error handler
@@ -303,7 +388,17 @@ app.use((err, req, res, next) => {
     
     // Use default error code of 500 if not specified
     const code = err.code || 500;
-    const result = { error: err.message, code };
+    
+    // Get the target URL from query parameters if available
+    const targetUrl = req.query && req.query.url ? req.query.url : req.originalUrl || req.url;
+    
+    // Format response according to the example
+    const result = { 
+        html: err.message,
+        apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+        url: targetUrl,
+        error: err.message
+    };
     
     // Log error details
     util.Logging.error(`Error processing request: ${err.message}`);

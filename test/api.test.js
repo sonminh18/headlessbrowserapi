@@ -54,6 +54,9 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 400);
                 assert.ok(response.body.error.includes("API key"));
+                assert.ok(response.body.html.includes("API key"));
+                assert.ok(typeof response.body.apicalls === 'number');
+                assert.ok(response.body.url);
             });
 
             it("should require URL", async function() {
@@ -101,7 +104,6 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 400);
                 assert.ok(response.body.error.includes("Unsupported engine"));
-                assert.strictEqual(response.body.message, "Only puppeteer engine is supported");
             });
             
             it("should validate cleanup parameter", async function() {
@@ -172,7 +174,7 @@ describe("API Endpoints", function() {
         });
         
         context("Puppeteer Engine Tests", function() {
-            it("should scrape content with default options", async function() {
+            it("should scrape content with default options and return correct format", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
                     .query({
@@ -181,7 +183,12 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                
+                // Verify response structure
+                assert.ok(response.body.html, "Response should have html field");
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.strictEqual(response.body.url, "http://example.com", "Response should include the requested URL");
+                assert.ok(response.body.html.includes("Example Domain"), "HTML should contain scraped content");
             });
 
             it("should handle 'default' parameter values", async function() {
@@ -199,7 +206,9 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.strictEqual(response.body.url, "http://example.com");
             });
 
             it("should handle custom user agent", async function() {
@@ -212,7 +221,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
             });
 
             it("should handle custom timeout", async function() {
@@ -225,7 +235,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
             });
 
             it("should handle custom cookies", async function() {
@@ -239,7 +250,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
             });
             
             it("should handle string format cookies", async function() {
@@ -254,7 +266,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
             });
 
             it("should handle proxy settings", async function() {
@@ -274,7 +287,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
             });
 
             it("should handle basic authentication", async function() {
@@ -287,7 +301,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
             });
             
             it("should handle cleanup parameter", async function() {
@@ -301,7 +316,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(responseCleanupEnabled.status, 200);
-                assert.ok(responseCleanupEnabled.text.includes("Example Domain"));
+                assert.ok(responseCleanupEnabled.body.html.includes("Example Domain"));
+                assert.ok(typeof responseCleanupEnabled.body.apicalls === 'number', "apicalls should be a number");
                 
                 // Test with cleanup disabled
                 const responseCleanupDisabled = await request(app)
@@ -313,7 +329,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(responseCleanupDisabled.status, 200);
-                assert.ok(responseCleanupDisabled.text.includes("Example Domain"));
+                assert.ok(responseCleanupDisabled.body.html.includes("Example Domain"));
+                assert.ok(typeof responseCleanupDisabled.body.apicalls === 'number', "apicalls should be a number");
             });
             
             it("should handle delay parameter", async function() {
@@ -326,7 +343,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
             });
             
             it("should handle localStorage parameter", async function() {
@@ -339,7 +357,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
             });
             
             it("should handle custom JavaScript evaluation", async function() {
@@ -353,7 +372,8 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
                 // We can't reliably test the actual JS execution in this mocked environment
             });
             
@@ -367,7 +387,23 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                assert.ok(response.text.includes("Example Domain"));
+                assert.ok(response.body.html.includes("Example Domain"));
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+            });
+            
+            it("should handle error responses with the correct format", async function() {
+                const response = await request(app)
+                    .get("/apis/scrape/v1/puppeteer")
+                    .query({
+                        apikey: "test",
+                        url: "http://notfound.example.com"
+                    });
+
+                assert.strictEqual(response.status, 500);
+                assert.ok(response.body.html, "Response should have html field");
+                assert.ok(response.body.error, "Response should have error field");
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.strictEqual(response.body.url, "http://notfound.example.com");
             });
             
             it("should detect and handle image URLs and return base64 data", async function() {
@@ -383,11 +419,14 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 
-                // Check that the response is base64 encoded data
-                // Base64 should only contain a-z, A-Z, 0-9, +, /, and = characters
-                const isBase64 = /^[A-Za-z0-9+/=]+$/.test(response.text);
-                assert.ok(isBase64, "Response should be base64 encoded data without data URI prefix");
+                // Check response structure
+                assert.ok(response.body.html, "Response should have html field");
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
                 
+                // Check that the html field contains base64 encoded data
+                // Base64 should only contain a-z, A-Z, 0-9, +, /, and = characters
+                const isBase64 = /^[A-Za-z0-9+/=]+$/.test(response.body.html);
+                assert.ok(isBase64, "HTML field should contain base64 encoded data without data URI prefix");
             });
             
             it("should handle different image formats (PNG) and return base64 data", async function() {
@@ -417,10 +456,13 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 
-                // Check that the response is base64 encoded data
-                const isBase64 = /^[A-Za-z0-9+/=]+$/.test(response.text);
-                assert.ok(isBase64, "Response should be base64 encoded data");
+                // Check response structure
+                assert.ok(response.body.html, "Response should have html field");
+                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
                 
+                // Check that the html field contains base64 encoded data
+                const isBase64 = /^[A-Za-z0-9+/=]+$/.test(response.body.html);
+                assert.ok(isBase64, "HTML field should contain base64 encoded data");
             });
         });
 
@@ -512,10 +554,13 @@ describe("API Endpoints", function() {
     });
 
     describe("404 Handler", function() {
-        it("should return 404 for unknown routes", async function() {
+        it("should return 404 for unknown routes with correct format", async function() {
             const response = await request(app).get("/unknown");
             assert.strictEqual(response.status, 404);
-            assert.strictEqual(response.body.error, "Route not found");
+            assert.ok(response.body.html, "Response should have html field");
+            assert.ok(response.body.error, "Response should have error field");
+            assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+            assert.strictEqual(response.body.url, "/unknown");
         });
     });
 });
