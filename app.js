@@ -85,9 +85,17 @@ const validateScrapeRequest = (req, res, next) => {
         // Validate custom cookies format if provided
         if (req.query.custom_cookies && req.query.custom_cookies !== 'default') {
             try {
+                // Try to parse as JSON
                 JSON.parse(decodeURIComponent(req.query.custom_cookies));
             } catch (error) {
-                return res.status(400).json({ error: "Invalid custom_cookies format. Must be URL-encoded JSON", code: 400 });
+                // If it's not valid JSON, assume it's a cookie string format
+                // Cookie strings should be in format: name=value;name2=value2
+                if (!req.query.custom_cookies.includes('=')) {
+                    return res.status(400).json({ 
+                        error: "Invalid custom_cookies format. Must be URL-encoded JSON or a string in format 'name=value;name2=value2'", 
+                        code: 400 
+                    });
+                }
             }
         }
         
@@ -108,6 +116,33 @@ const validateScrapeRequest = (req, res, next) => {
         // Validate proxy_auth format if provided (should be username:password)
         if (req.query.proxy_auth && req.query.proxy_auth !== 'default' && !req.query.proxy_auth.includes(':')) {
             return res.status(400).json({ error: "Invalid proxy_auth format. Must be 'username:password'", code: 400 });
+        }
+        
+        // Validate cleanup parameter if provided
+        if (req.query.cleanup && req.query.cleanup !== 'true' && req.query.cleanup !== 'false') {
+            return res.status(400).json({ error: "Invalid cleanup value. Must be 'true' or 'false'", code: 400 });
+        }
+        
+        // Validate delay parameter (must be a number)
+        if (req.query.delay && req.query.delay !== 'default') {
+            const delay = parseInt(req.query.delay, 10);
+            if (isNaN(delay) || delay < 0) {
+                return res.status(400).json({ error: "Delay must be a non-negative number", code: 400 });
+            }
+        }
+        
+        // Validate basic_auth format if provided (should be username:password)
+        if (req.query.basic_auth && req.query.basic_auth !== 'default' && !req.query.basic_auth.includes(':')) {
+            return res.status(400).json({ error: "Invalid basic_auth format. Must be 'username:password'", code: 400 });
+        }
+        
+        // Validate eval parameter if provided (must be URL-encoded)
+        if (req.query.eval && req.query.eval !== 'default') {
+            try {
+                decodeURIComponent(req.query.eval);
+            } catch (error) {
+                return res.status(400).json({ error: "Invalid eval parameter. Must be URL-encoded JavaScript", code: 400 });
+            }
         }
         
         // Get the appropriate engine
@@ -143,14 +178,31 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             url,
             customUserAgent: req.query.custom_user_agent !== 'default' ? req.query.custom_user_agent : undefined,
             customCookies: req.query.custom_cookies && req.query.custom_cookies !== 'default' 
-                ? JSON.parse(decodeURIComponent(req.query.custom_cookies)) 
+                ? (() => {
+                    try {
+                        // Try to parse as JSON first
+                        return JSON.parse(decodeURIComponent(req.query.custom_cookies));
+                    } catch (error) {
+                        // If it's not valid JSON, treat it as a cookie string
+                        return req.query.custom_cookies;
+                    }
+                })()
                 : undefined,
             userPass: req.query.user_pass !== 'default' ? req.query.user_pass : undefined,
             timeout: req.query.timeout && req.query.timeout !== 'default' 
                 ? parseInt(req.query.timeout, 10) 
                 : undefined,
             proxyUrl: req.query.proxy_url !== 'default' ? req.query.proxy_url : undefined,
-            proxyAuth: req.query.proxy_auth !== 'default' ? req.query.proxy_auth : undefined
+            proxyAuth: req.query.proxy_auth !== 'default' ? req.query.proxy_auth : undefined,
+            cleanup: req.query.cleanup === 'false' ? false : true,
+            delayTime: req.query.delay && req.query.delay !== 'default' 
+                ? parseInt(req.query.delay, 10) 
+                : undefined,
+            localStorage: req.query.localstorage !== 'default' ? req.query.localstorage : undefined,
+            customEval: req.query.eval && req.query.eval !== 'default' 
+                ? decodeURIComponent(req.query.eval) 
+                : undefined,
+            basicAuth: req.query.basic_auth !== 'default' ? req.query.basic_auth : undefined
         };
 
         // Create a unique cache key based on URL and relevant options

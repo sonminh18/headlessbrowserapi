@@ -8,6 +8,11 @@ A high-performance API for rendering web pages using headless browsers. This ser
   - Puppeteer (Chrome/Chromium)
 - Fast response times with integrated caching
 - Custom user agent, cookies, proxy, and authentication support
+- JavaScript and CSS cleanup for cleaner output
+- Image handling and base64 encoding
+- Local storage manipulation
+- Custom JavaScript evaluation
+- Delay capabilities for dynamic content
 - Simple REST API interface
 - Performance monitoring and benchmarking
 
@@ -23,15 +28,37 @@ Parameters:
 - `apikey` (required): Your API key for authentication
 - `url` (required): The URL to scrape
 - `custom_user_agent`: Custom user agent string
-- `custom_cookies`: URL-encoded JSON object with cookies
+- `custom_cookies`: URL-encoded JSON object with cookies or string in format "name=value;name2=value2"
 - `user_pass`: Basic authentication credentials (format: `username:password`)
+- `basic_auth`: Alternative basic authentication via Authorization header (format: `username:password`)
 - `timeout`: Timeout in milliseconds
+- `delay`: Delay in milliseconds after page load to allow dynamic content to render
 - `proxy_url`: Proxy server URL
 - `proxy_auth`: Proxy authentication credentials (format: `username:password`)
+- `cleanup`: Set to 'false' to disable removing JavaScript and CSS from output (default: 'true')
+- `localstorage`: Local storage items to set in format "key=value;key2=value2"
+- `eval`: Custom JavaScript to evaluate on the page (URL-encoded)
 
-Example:
+Examples:
+
+Basic scraping:
 ```
 GET /apis/scrape/v1/puppeteer?apikey=your_api_key&url=http://example.com&timeout=5000
+```
+
+With cleanup disabled:
+```
+GET /apis/scrape/v1/puppeteer?apikey=your_api_key&url=http://example.com&cleanup=false
+```
+
+With delay and local storage:
+```
+GET /apis/scrape/v1/puppeteer?apikey=your_api_key&url=http://example.com&delay=2000&localstorage=token=abc123;lastVisit=2023-05-01
+```
+
+With custom JavaScript evaluation:
+```
+GET /apis/scrape/v1/puppeteer?apikey=your_api_key&url=http://example.com&eval=document.querySelector('.popup-modal').click()
 ```
 
 ### Get API Information
