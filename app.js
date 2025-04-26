@@ -322,6 +322,8 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                 };
                 
                 res.json(response);
+                // Done Process the request
+                util.Logging.info(`Response sent for ${url} using ${req.params.engine} engine`);
             }
         } catch (error) {
             clearTimeout(timeoutId);
