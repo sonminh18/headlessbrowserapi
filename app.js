@@ -44,28 +44,6 @@ process.on("exit", () => {
     util.Logging.info("Exiting on user's request");
 });
 
-/**
- * Helper function to check if a URL is an image
- * @param {string} url - The URL to check
- * @returns {boolean} True if the URL points to an image
- */
-const isImageUrl = (url) => {
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.jpe', '.webp'];
-    const lowercasedUrl = url.toLowerCase().split('?')[0].split('#')[0];
-    return imageExtensions.some((extension) => lowercasedUrl.endsWith(extension));
-};
-
-/**
- * Helper function to check if a URL is a video
- * @param {string} url - The URL to check
- * @returns {boolean} True if the URL points to a video
- */
-const isVideoUrl = (url) => {
-    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.wmv', '.flv', '.mkv', '.m4v', '.mpeg', '.mpg'];
-    const lowercasedUrl = url.toLowerCase().split('?')[0].split('#')[0];
-    return videoExtensions.some((extension) => lowercasedUrl.endsWith(extension));
-};
-
 // Request validation middleware
 const validateScrapeRequest = (req, res, next) => {
     try {
@@ -253,6 +231,43 @@ const validateScrapeRequest = (req, res, next) => {
     }
 };
 
+// Helper function to format video URLs consistently
+const formatVideoUrls = (videoUrls) => {
+    return videoUrls
+        .filter(video => {
+            // Validate URL is a video by extension and not an image
+            const url = video.url || '';
+            const lowercaseUrl = url.toLowerCase();
+            
+            // Skip URLs with image extensions
+            if (lowercaseUrl.match(/\.(jpe?g|png|gif|bmp|webp)(\?.*)?$/i)) {
+                return false;
+            }
+            
+            // Accept only video and streaming URLs
+            const hasVideoExtension = lowercaseUrl.match(/\.(mp4|webm|ogg|mov|avi|wmv|flv|mkv|m4v|mpeg|mpg|m3u8|mpd)(\?.*)?$/i);
+            const hasVideoMimeType = (video.mimeType || '').startsWith('video/') || 
+                                   (video.mimeType || '').includes('mpegURL') ||
+                                   (video.mimeType || '').includes('dash+xml');
+                                     
+            return hasVideoExtension || hasVideoMimeType;
+        })
+        .map(video => {
+            // Only return url and isHLS properties
+            const videoInfo = {
+                url: video.url
+            };
+            
+            // Add isHLS flag for HLS videos
+            if (video.url.toLowerCase().includes('.m3u8') || 
+                (video.mimeType && (video.mimeType.includes('mpegURL') || video.mimeType.includes('x-mpegURL')))) {
+                videoInfo.isHLS = true;
+            }
+            
+            return videoInfo;
+        });
+};
+
 // API endpoint for scraping
 app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next) => {
     try {
@@ -309,26 +324,8 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             
             // Include video URLs if found in cache
             if (cachedResult.videoUrls && cachedResult.videoUrls.length > 0) {
-                // Final filtering to ensure only valid video URLs are returned
-                const filteredVideoUrls = cachedResult.videoUrls
-                    .filter(video => {
-                        // Validate URL is a video by extension and not an image
-                        const url = video.url || '';
-                        const lowercaseUrl = url.toLowerCase();
-                        
-                        // Skip URLs with image extensions
-                        if (lowercaseUrl.match(/\.(jpe?g|png|gif|bmp|webp)(\?.*)?$/i)) {
-                            return false;
-                        }
-                        
-                        // Accept only video and streaming URLs
-                        const hasVideoExtension = lowercaseUrl.match(/\.(mp4|webm|ogg|mov|avi|wmv|flv|mkv|m4v|mpeg|mpg|m3u8|mpd)(\?.*)?$/i);
-                        const hasVideoMimeType = (video.mimeType || '').startsWith('video/') || 
-                                                 (video.mimeType || '').includes('mpegURL') ||
-                                                 (video.mimeType || '').includes('dash+xml');
-                                                 
-                        return hasVideoExtension || hasVideoMimeType;
-                    });
+                // Process the video URLs using the helper function
+                const filteredVideoUrls = formatVideoUrls(cachedResult.videoUrls);
                 
                 if (filteredVideoUrls.length > 0) {
                     response.videoUrls = filteredVideoUrls;
@@ -387,11 +384,14 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                                              
                             return hasVideoExtension || hasVideoMimeType;
                         })
-                        .map(video => ({
-                            url: video.url,
-                            mimeType: video.mimeType || '',
-                            size: video.size || 0
-                        }));
+                        .map(video => {
+                            // Only store url and mimeType for detection in cache
+                            const videoInfo = {
+                                url: video.url,
+                                mimeType: video.mimeType || '' // Keep mimeType for isHLS detection
+                            };
+                            return videoInfo;
+                        });
                     
                     if (cleanedVideoUrls.length > 0) {
                         cacheObject.videoUrls = cleanedVideoUrls;
@@ -410,32 +410,8 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                 
                 // Include video URLs if found
                 if (res.locals.videoUrls && res.locals.videoUrls.length > 0) {
-                    // Clean and optimize video URLs for response
-                    // Final filtering to ensure only valid video URLs are returned
-                    const filteredVideoUrls = res.locals.videoUrls
-                        .filter(video => {
-                            // Validate URL is a video by extension and not an image
-                            const url = video.url || '';
-                            const lowercaseUrl = url.toLowerCase();
-                            
-                            // Skip URLs with image extensions
-                            if (lowercaseUrl.match(/\.(jpe?g|png|gif|bmp|webp)(\?.*)?$/i)) {
-                                return false;
-                            }
-                            
-                            // Accept only video and streaming URLs
-                            const hasVideoExtension = lowercaseUrl.match(/\.(mp4|webm|ogg|mov|avi|wmv|flv|mkv|m4v|mpeg|mpg|m3u8|mpd)(\?.*)?$/i);
-                            const hasVideoMimeType = (video.mimeType || '').startsWith('video/') || 
-                                                     (video.mimeType || '').includes('mpegURL') ||
-                                                     (video.mimeType || '').includes('dash+xml');
-                                             
-                            return hasVideoExtension || hasVideoMimeType;
-                        })
-                        .map(video => ({
-                            url: video.url,
-                            mimeType: video.mimeType || '',
-                            size: video.size || 0
-                        }));
+                    // Process the video URLs using the helper function
+                    const filteredVideoUrls = formatVideoUrls(res.locals.videoUrls);
                     
                     if (filteredVideoUrls.length > 0) {
                         response.videoUrls = filteredVideoUrls;
@@ -558,5 +534,6 @@ if (process.env.NODE_ENV !== "test") {
 module.exports = app;
 
 // Export utility functions for testing
+const { isImageUrl, isVideoUrl } = require('./lib/engines/puppeteer');
 module.exports.isImageUrl = isImageUrl;
 module.exports.isVideoUrl = isVideoUrl;
