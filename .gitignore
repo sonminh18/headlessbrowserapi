@@ -4,3 +4,5 @@
 /.vscode/settings.json
 
 /node_modules
+
+/chrome-headless-shell

@@ -300,27 +300,39 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             util.Logging.info(`Cache hit for ${url}`);
             res.setHeader("X-Cache", "HIT");
             
-            // Create response with HTML content
-            let responseHtml = cachedResult.html;
-            
-            // If video URLs are present and we should return the URL directly
-            if (cachedResult.videoUrls && cachedResult.videoUrls.length > 0) {
-                // Return first video URL in html field if requested URL is not an image
-                if (!isImageUrl(url)) {
-                    responseHtml = cachedResult.videoUrls[0].url;
-                }
-            }
-            
-            // Format response
+            // Format response - always use raw HTML content from cache
             const response = {
-                html: responseHtml,
-                apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                html: cachedResult.html,
+                apicalls: lib.conf.API_CALLS_LIMIT,
                 url: url
             };
             
-            // Still include the full videoUrls array for reference
+            // Include video URLs if found in cache
             if (cachedResult.videoUrls && cachedResult.videoUrls.length > 0) {
-                response.videoUrls = cachedResult.videoUrls;
+                // Final filtering to ensure only valid video URLs are returned
+                const filteredVideoUrls = cachedResult.videoUrls
+                    .filter(video => {
+                        // Validate URL is a video by extension and not an image
+                        const url = video.url || '';
+                        const lowercaseUrl = url.toLowerCase();
+                        
+                        // Skip URLs with image extensions
+                        if (lowercaseUrl.match(/\.(jpe?g|png|gif|bmp|webp)(\?.*)?$/i)) {
+                            return false;
+                        }
+                        
+                        // Accept only video and streaming URLs
+                        const hasVideoExtension = lowercaseUrl.match(/\.(mp4|webm|ogg|mov|avi|wmv|flv|mkv|m4v|mpeg|mpg|m3u8|mpd)(\?.*)?$/i);
+                        const hasVideoMimeType = (video.mimeType || '').startsWith('video/') || 
+                                                 (video.mimeType || '').includes('mpegURL') ||
+                                                 (video.mimeType || '').includes('dash+xml');
+                                                 
+                        return hasVideoExtension || hasVideoMimeType;
+                    });
+                
+                if (filteredVideoUrls.length > 0) {
+                    response.videoUrls = filteredVideoUrls;
+                }
             }
             
             return res.json(response);
@@ -355,33 +367,79 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                 };
                 
                 if (res.locals.videoUrls && res.locals.videoUrls.length > 0) {
-                    cacheObject.videoUrls = res.locals.videoUrls;
+                    // Clean and optimize video URLs before storing
+                    const cleanedVideoUrls = res.locals.videoUrls
+                        .filter(video => {
+                            // Validate URL is a video by extension and not an image
+                            const url = video.url || '';
+                            const lowercaseUrl = url.toLowerCase();
+                            
+                            // Skip URLs with image extensions
+                            if (lowercaseUrl.match(/\.(jpe?g|png|gif|bmp|webp)(\?.*)?$/i)) {
+                                return false;
+                            }
+                            
+                            // Accept only video and streaming URLs
+                            const hasVideoExtension = lowercaseUrl.match(/\.(mp4|webm|ogg|mov|avi|wmv|flv|mkv|m4v|mpeg|mpg|m3u8|mpd)(\?.*)?$/i);
+                            const hasVideoMimeType = (video.mimeType || '').startsWith('video/') || 
+                                                     (video.mimeType || '').includes('mpegURL') ||
+                                                     (video.mimeType || '').includes('dash+xml');
+                                             
+                            return hasVideoExtension || hasVideoMimeType;
+                        })
+                        .map(video => ({
+                            url: video.url,
+                            mimeType: video.mimeType || '',
+                            size: video.size || 0
+                        }));
+                    
+                    if (cleanedVideoUrls.length > 0) {
+                        cacheObject.videoUrls = cleanedVideoUrls;
+                    }
                 }
                 
                 await cache.set(cacheKey, cacheObject);
                 res.setHeader("X-Cache", "MISS");
                 
-                // Get HTML content or video URL
-                let responseHtml = res.locals.content;
-                
-                // If video URLs are present and we should return the URL directly
-                if (res.locals.videoUrls && res.locals.videoUrls.length > 0) {
-                    // Return first video URL in html field if requested URL is not an image
-                    if (!isImageUrl(url)) {
-                        responseHtml = res.locals.videoUrls[0].url;
-                    }
-                }
-                
-                // Format response
+                // Format response - always return raw HTML content
                 const response = {
-                    html: responseHtml,
-                    apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
+                    html: res.locals.content,
+                    apicalls: lib.conf.API_CALLS_LIMIT,
                     url: url
                 };
                 
-                // Still include the full videoUrls array for reference
+                // Include video URLs if found
                 if (res.locals.videoUrls && res.locals.videoUrls.length > 0) {
-                    response.videoUrls = res.locals.videoUrls;
+                    // Clean and optimize video URLs for response
+                    // Final filtering to ensure only valid video URLs are returned
+                    const filteredVideoUrls = res.locals.videoUrls
+                        .filter(video => {
+                            // Validate URL is a video by extension and not an image
+                            const url = video.url || '';
+                            const lowercaseUrl = url.toLowerCase();
+                            
+                            // Skip URLs with image extensions
+                            if (lowercaseUrl.match(/\.(jpe?g|png|gif|bmp|webp)(\?.*)?$/i)) {
+                                return false;
+                            }
+                            
+                            // Accept only video and streaming URLs
+                            const hasVideoExtension = lowercaseUrl.match(/\.(mp4|webm|ogg|mov|avi|wmv|flv|mkv|m4v|mpeg|mpg|m3u8|mpd)(\?.*)?$/i);
+                            const hasVideoMimeType = (video.mimeType || '').startsWith('video/') || 
+                                                     (video.mimeType || '').includes('mpegURL') ||
+                                                     (video.mimeType || '').includes('dash+xml');
+                                             
+                            return hasVideoExtension || hasVideoMimeType;
+                        })
+                        .map(video => ({
+                            url: video.url,
+                            mimeType: video.mimeType || '',
+                            size: video.size || 0
+                        }));
+                    
+                    if (filteredVideoUrls.length > 0) {
+                        response.videoUrls = filteredVideoUrls;
+                    }
                 }
                 
                 res.json(response);
