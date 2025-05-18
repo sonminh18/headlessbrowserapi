@@ -6,6 +6,7 @@ const info = require("./package");
 const lib = require("./lib");
 const CacheManager = require("./lib/util/cache");
 const { verifyKey } = require("./lib");
+const { DEFAULT_BROWSER_TIMEOUT } = require("./lib/util/config");
 
 // Set up chrome-headless-shell executable path if not already set
 try {
@@ -105,6 +106,9 @@ const validateScrapeRequest = (req, res, next) => {
                     error: "Timeout must be a positive number" 
                 });
             }
+            
+            // Log the custom timeout being used
+            util.Logging.info(`Using custom timeout from request: ${timeout}ms`);
         }
         
         // Validate custom cookies format if provided
@@ -343,7 +347,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
         res.locals = {};
         
         // Set a request timeout based on the provided timeout or a default
-        const requestTimeout = options.timeout || lib.conf.BROWSER.timeout || 30000;
+        const requestTimeout = options.timeout || lib.conf.BROWSER.timeout || DEFAULT_BROWSER_TIMEOUT;
         const timeoutId = setTimeout(() => {
             const error = new Error(`Request timed out after ${requestTimeout}ms`);
             error.code = 504;
