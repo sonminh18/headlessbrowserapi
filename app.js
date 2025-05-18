@@ -472,6 +472,45 @@ app.get("/health", (req, res) => {
     res.status(200).json({ status: "ok" });
 });
 
+// API endpoint for clearing cache - simplified without key verification
+app.get("/apis/cache/clear", async (req, res, next) => {
+    try {
+        const { pattern } = req.query;
+        
+        // Log the cache clear request
+        util.Logging.info(`Cache clear request received ${pattern ? `with pattern: ${pattern}` : '(all cache)'}`);
+        
+        // Clear cache with optional pattern
+        await cache.clear(pattern || '*');
+        
+        // Get cache statistics after clearing
+        const stats = await cache.getStats();
+        
+        res.json({
+            success: true,
+            message: `Cache ${pattern ? `matching pattern '${pattern}'` : 'completely'} cleared`,
+            stats
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// API endpoint for getting cache stats - simplified without key verification
+app.get("/apis/cache/stats", async (req, res, next) => {
+    try {
+        // Get cache statistics
+        const stats = await cache.getStats();
+        
+        res.json({
+            success: true,
+            stats
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 // 404 handler
 app.all("*", (req, res) => {
     res.status(404);
