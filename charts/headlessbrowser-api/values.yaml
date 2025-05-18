@@ -22,7 +22,7 @@ env:
   # Port to listen on
   PORT: "3000"
   # Path to the Chrome/Puppeteer executable (automatically detected if not set)
-  PUPPETEER_EXECUTABLE_PATH: "/app/chrome-headless-shell/linux-135.0.7049.114/chrome-headless-shell-linux64/chrome-headless-shell"
+  # PUPPETEER_EXECUTABLE_PATH: "/app/chrome-headless-shell/linux-135.0.7049.114/chrome-headless-shell-linux64/chrome-headless-shell"
   # Browser arguments (comma-separated)
   BROWSER_ARGS: "--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu"
   # Browser viewport width
