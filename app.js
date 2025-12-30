@@ -1,5 +1,6 @@
 // requires the multiple libraries
 const express = require("express");
+const path = require("path");
 const process = require("process");
 const util = require("hive-js-util");
 const info = require("./package");
@@ -7,6 +8,11 @@ const lib = require("./lib");
 const CacheManager = require("./lib/util/cache");
 const { verifyKey } = require("./lib");
 const { DEFAULT_BROWSER_TIMEOUT } = require("./lib/util/config");
+const { s3Storage } = require("./lib/util/s3-storage");
+const { downloadVideo, cleanupTempFiles } = require("./lib/util/video-downloader");
+const { createAdminRouter } = require("./lib/routes/admin");
+const { videoTracker, selectBestVideo } = require("./lib/util/video-tracker");
+const { urlTracker, URL_STATUS } = require("./lib/util/url-tracker");
 
 // Set up chrome-headless-shell executable path if not already set
 try {
@@ -27,10 +33,25 @@ try {
 // builds the initial application object to be used
 // by the application for serving
 const app = express();
+
+// Parse JSON for admin routes first
+app.use('/admin', express.json());
+
+// Raw body parser for other routes (scraping)
 app.use(express.raw({ limit: "1GB", type: "*/*" }));
 
-// Initialize cache with TTL of 1 hour (3600 seconds)
-const cache = new CacheManager(3600);
+// Initialize cache with TTL of 30 days (2592000 seconds)
+const cache = new CacheManager(parseInt(process.env.CACHE_TTL) || 2592000);
+
+// Helper function to get browser pool from engine
+const getBrowserPool = async () => {
+    try {
+        const engineInstance = lib.ENGINES.puppeteer.singleton();
+        return engineInstance.browserPool;
+    } catch (err) {
+        return null;
+    }
+};
 
 // Graceful shutdown handlers
 const handleShutdown = async () => {
@@ -175,6 +196,26 @@ const validateScrapeRequest = (req, res, next) => {
             });
         }
         
+        // Validate upload parameter if provided
+        if (req.query.upload && req.query.upload !== 'true' && req.query.upload !== 'false') {
+            return res.status(400).json({ 
+                html: "Invalid upload value. Must be 'true' or 'false'", 
+                apicalls: lib.conf.API_CALLS_LIMIT,
+                url: req.originalUrl || req.url,
+                error: "Invalid upload value. Must be 'true' or 'false'" 
+            });
+        }
+        
+        // Check S3 configuration if upload=true
+        if (req.query.upload === 'true' && !s3Storage.isConfigured()) {
+            return res.status(400).json({ 
+                html: "S3 storage is not configured. Set S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY environment variables.", 
+                apicalls: lib.conf.API_CALLS_LIMIT,
+                url: req.originalUrl || req.url,
+                error: "S3 storage is not configured" 
+            });
+        }
+        
         // Validate delay parameter (must be a number)
         if (req.query.delay && req.query.delay !== 'default') {
             const delay = parseInt(req.query.delay, 10);
@@ -274,9 +315,15 @@ const formatVideoUrls = (videoUrls) => {
 
 // API endpoint for scraping
 app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next) => {
+    let urlRecord = null;
+    
     try {
         const { url } = req.query;
         const engineModule = req.engineModule;
+        
+        // Track URL processing
+        urlRecord = await urlTracker.addUrl(url);
+        await urlTracker.updateStatus(urlRecord.id, URL_STATUS.PROCESSING);
         
         // Create a clean options object from query parameters
         const options = {
@@ -323,7 +370,8 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             const response = {
                 html: cachedResult.html,
                 apicalls: lib.conf.API_CALLS_LIMIT,
-                url: url
+                url: url,
+                cached: true
             };
             
             // Include video URLs if found in cache
@@ -332,7 +380,62 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                 const filteredVideoUrls = formatVideoUrls(cachedResult.videoUrls);
                 
                 if (filteredVideoUrls.length > 0) {
-                    response.videoUrls = filteredVideoUrls;
+                    // Check if any videos have been synced to CDN and replace URLs
+                    const allVideos = await videoTracker.getAll();
+                    const enhancedVideoUrls = filteredVideoUrls.map(video => {
+                        // Find synced video record matching this URL
+                        const syncedRecord = allVideos.find(v => 
+                            v.videoUrl === video.url && v.status === 'synced' && v.s3Url
+                        );
+                        if (syncedRecord) {
+                            return {
+                                ...video,
+                                url: syncedRecord.s3Url,
+                                originalUrl: video.url,
+                                synced: true
+                            };
+                        }
+                        return video;
+                    });
+                    response.videoUrls = enhancedVideoUrls;
+                }
+            }
+            
+            // Update URL status to done with cached result
+            if (urlRecord) {
+                const cachedResponse = {
+                    htmlLength: cachedResult.html?.length || 0,
+                    htmlPreview: cachedResult.html?.substring(0, 500) || '',
+                    videoUrls: response.videoUrls || [],
+                    cached: true,
+                    title: cachedResult.title || null
+                };
+                await urlTracker.updateStatus(urlRecord.id, URL_STATUS.DONE, null, cachedResponse);
+            }
+            
+            // Track videos from cache - only sync the BEST video to avoid storage bloat
+            if (response.videoUrls && response.videoUrls.length > 0) {
+                const autoSync = process.env.AUTO_SYNC_VIDEOS === 'true' && s3Storage.isConfigured();
+                
+                // Select best video for syncing
+                const bestVideo = selectBestVideo(response.videoUrls);
+                
+                for (const video of response.videoUrls) {
+                    const videoRecord = await videoTracker.addVideo({
+                        videoUrl: video.url,
+                        sourceUrl: url,
+                        mimeType: video.mimeType || 'video/mp4',
+                        isHLS: video.isHLS || false
+                    });
+                    
+                    // Auto-sync ONLY the best video to S3 (don't block response)
+                    const isBestVideo = bestVideo && (video.url === bestVideo.url);
+                    if (autoSync && isBestVideo) {
+                        util.Logging.info(`Auto-sync triggered for BEST video ${videoRecord.id} from cache hit`);
+                        videoTracker.syncVideo(videoRecord.id).catch(err => {
+                            util.Logging.warn(`Auto-sync failed for video ${videoRecord.id}: ${err.message}`);
+                        });
+                    }
                 }
             }
             
@@ -422,6 +525,77 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                     }
                 }
                 
+                // Upload video to S3 if requested
+                if (req.query.upload === 'true' && response.videoUrls && response.videoUrls.length > 0) {
+                    const video = response.videoUrls[0];
+                    const tempFiles = [];
+                    
+                    try {
+                        util.Logging.info(`Starting video download: ${video.url}`);
+                        
+                        // Download video (handles both direct and HLS)
+                        const downloadResult = await downloadVideo(video, {
+                            maxSizeMB: lib.conf.UPLOAD?.maxSizeMB,
+                            timeout: lib.conf.UPLOAD?.timeout
+                        });
+                        
+                        tempFiles.push(...downloadResult.tempFiles);
+                        
+                        // Generate S3 key and upload
+                        const s3Key = s3Storage.generateKey(video.url);
+                        util.Logging.info(`Uploading video to S3: ${s3Key}`);
+                        
+                        const s3Url = await s3Storage.uploadFromFile(
+                            downloadResult.filePath,
+                            s3Key,
+                            downloadResult.contentType
+                        );
+                        
+                        // Replace URL in response
+                        video.url = s3Url;
+                        delete video.isHLS; // No longer HLS after conversion
+                        
+                        util.Logging.info(`Video uploaded to S3: ${s3Url}`);
+                    } catch (err) {
+                        util.Logging.error(`Video upload failed: ${err.message}`);
+                        response.uploadError = err.message;
+                    } finally {
+                        // Always cleanup temp files
+                        await cleanupTempFiles(tempFiles);
+                    }
+                }
+                
+                // Track videos if found - only sync the BEST video
+                if (response.videoUrls && response.videoUrls.length > 0) {
+                    const autoSync = process.env.AUTO_SYNC_VIDEOS === 'true' && s3Storage.isConfigured();
+                    
+                    // Select best video for syncing to avoid storage bloat
+                    const bestVideo = selectBestVideo(response.videoUrls);
+                    
+                    for (const video of response.videoUrls) {
+                        const videoRecord = await videoTracker.addVideo({
+                            videoUrl: video.url,
+                            sourceUrl: url,
+                            mimeType: video.mimeType || 'video/mp4',
+                            isHLS: video.isHLS || false
+                        });
+                        
+                        // Auto-sync ONLY the best video to S3 (don't block response)
+                        const isBestVideo = bestVideo && (video.url === bestVideo.url);
+                        if (autoSync && !video.s3Url && isBestVideo) {
+                            util.Logging.info(`Auto-sync triggered for BEST video ${videoRecord.id}`);
+                            videoTracker.syncVideo(videoRecord.id).catch(err => {
+                                util.Logging.warn(`Auto-sync failed for video ${videoRecord.id}: ${err.message}`);
+                            });
+                        }
+                    }
+                }
+                
+                // Update URL status to done with scrape result
+                if (urlRecord) {
+                    await urlTracker.updateStatus(urlRecord.id, URL_STATUS.DONE, null, response);
+                }
+                
                 res.json(response);
                 // Done Process the request
                 util.Logging.info(`Response sent for ${url} using ${req.params.engine} engine`);
@@ -431,6 +605,10 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             throw error;
         }
     } catch (error) {
+        // Update URL status to error
+        if (urlRecord) {
+            await urlTracker.updateStatus(urlRecord.id, URL_STATUS.ERROR, error.message);
+        }
         next(error);
     }
 });
@@ -510,6 +688,18 @@ app.get("/apis/cache/stats", async (req, res, next) => {
         next(error);
     }
 });
+
+// ==================== Admin Portal ====================
+
+// Serve admin static files
+app.use('/admin', express.static(path.join(__dirname, 'admin/dist')));
+
+// Mount admin API routes
+const adminRouter = createAdminRouter({
+    cache,
+    getBrowserPool
+});
+app.use('/admin', adminRouter);
 
 // 404 handler
 app.all("*", (req, res) => {

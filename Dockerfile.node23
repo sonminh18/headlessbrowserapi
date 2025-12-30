@@ -1,4 +1,26 @@
-FROM node:23-bookworm-slim as test
+# ============================================
+# Stage 1: Build Admin Portal
+# ============================================
+FROM node:23-alpine AS admin-builder
+
+WORKDIR /app/admin
+
+# Copy admin package files
+COPY admin/package*.json ./
+
+# Install admin dependencies
+RUN npm ci
+
+# Copy admin source
+COPY admin/ ./
+
+# Build admin portal
+RUN npm run build
+
+# ============================================
+# Stage 2: Test
+# ============================================
+FROM node:23-bookworm-slim AS test
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -7,60 +29,68 @@ RUN apt-get update \
     ca-certificates libglib2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
     libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
     libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2 libxss1 \
-    libxtst6 xauth xvfb \
+    libxtst6 xauth xvfb ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY . ./
+# Copy package files and install
+COPY package*.json ./
 RUN npm install -g puppeteer@24.7.1
 RUN npx @puppeteer/browsers install chrome-headless-shell@stable --verbose
+RUN npm ci --ignore-scripts=true
 
-RUN npm i --ignore-scripts=true
+# Copy source code
+COPY lib ./lib
+COPY app.js ./
+COPY test ./test
+
+# Run tests
 RUN npm run test
 
-FROM node:23-bookworm-slim as prod
+# ============================================
+# Stage 3: Production
+# ============================================
+FROM node:23-bookworm-slim AS prod
 
+# Install Chromium, ffprobe (for video validation), and yt-dlp (for HLS download)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+    chromium \
     fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-khmeros \
     fonts-kacst fonts-freefont-ttf dbus dbus-x11 bzip2 wget curl gnupg \
     ca-certificates libglib2.0-0 libnss3 libatk1.0-0 libatk-bridge2.0-0 \
     libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
     libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2 libxss1 \
-    libxtst6 xauth xvfb \
+    libxtst6 xauth xvfb ffmpeg python3 python3-pip \
+    && pip3 install --break-system-packages yt-dlp \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
 WORKDIR /app
 
 # Copy package files
-COPY package.json ./
+COPY package*.json ./
 
-# Install production dependencies only
-RUN npm install -g puppeteer@24.7.1
-RUN npx @puppeteer/browsers install chrome-headless-shell@stable --verbose
-
-# Add script to find chrome-headless-shell path dynamically
-RUN echo '#!/bin/sh\n\
-find /app/chrome-headless-shell -type f -name "chrome-headless-shell" -not -path "*/\.*" | head -n 1\n\
-' > /app/find-chrome-headless-shell.sh \
-    && chmod +x /app/find-chrome-headless-shell.sh
-
-# Set Chrome as default browser and configure optimization flags
+# Set environment variables - use system Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     PORT=3000 \
     HOST=0.0.0.0 \
+    NODE_ENV=production \
     BROWSER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--disable-extensions,--js-flags=--expose-gc --max-old-space-size=512,--disable-background-networking" \
     BROWSER_MAX_CONCURRENCY=3 \
     BROWSER_MAX_PAGES_PER_BROWSER=30 \
     BROWSER_TTL=1800000
 
+# Install production dependencies
+RUN npm ci --omit=dev --ignore-scripts=true && npm cache clean --force
+
 # Copy application code
 COPY lib ./lib
 COPY app.js ./
-RUN npm i --omit=dev --ignore-scripts=true
-RUN npm cache clean --force
+
+# Copy built admin portal from admin-builder stage
+COPY --from=admin-builder /app/admin/dist ./admin/dist
 
 # Expose port
 EXPOSE 3000
@@ -69,7 +99,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD wget -q --spider http://localhost:3000/health || exit 1
 
-# Set PUPPETEER_EXECUTABLE_PATH at runtime and start the application
-CMD export PUPPETEER_EXECUTABLE_PATH=$(/app/find-chrome-headless-shell.sh) && \
-    echo "Using Chrome at: $PUPPETEER_EXECUTABLE_PATH" && \
-    node app.js
+# Start application
+CMD echo "Using Chromium at: $PUPPETEER_EXECUTABLE_PATH" && node app.js
