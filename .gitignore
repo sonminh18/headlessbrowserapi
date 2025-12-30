@@ -6,3 +6,6 @@
 /node_modules
 
 /chrome-headless-shell
+docker-compose.yml
+.cursor
+/admin/node_modules

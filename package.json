@@ -38,9 +38,19 @@
         "test:coverage": "nyc mocha --recursive --exit",
         "benchmark": "node benchmark/index.js",
         "upgrade": "npx sort-package-json && ncu -u",
-        "install:browsers": "npx @puppeteer/browsers install chrome-headless-shell@stable"
+        "install:browsers": "npx @puppeteer/browsers install chrome-headless-shell@stable",
+        "admin:install": "cd admin && npm install",
+        "admin:dev": "cd admin && npm run dev",
+        "admin:build": "cd admin && npm run build",
+        "build": "npm run admin:build",
+        "docker:build": "docker-compose build",
+        "docker:up": "docker-compose up -d",
+        "docker:down": "docker-compose down",
+        "docker:logs": "docker-compose logs -f api"
     },
     "dependencies": {
+        "@aws-sdk/client-s3": "^3.705.0",
+        "@aws-sdk/lib-storage": "^3.705.0",
         "consola": "^2.15.3",
         "express": "^4.18.2",
         "hive-js-util": "^0.4.1",

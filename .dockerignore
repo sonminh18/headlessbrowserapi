@@ -1,0 +1,32 @@
+# Dependencies
+node_modules
+admin/node_modules
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+.cursor
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage
+.nyc_output
+
+# Misc
+*.md
+.env*
+docker-compose*.yml
+benchmark
+charts
+.github
+chrome-headless-shell
+
+# Admin build output (will be built in Docker)
+admin/dist
