@@ -8,11 +8,17 @@ import {
   addVideo,
   updateVideo,
   deleteVideo,
+  bulkDeleteVideos,
   syncVideo,
   syncAllVideos,
   downloadVideo as downloadVideoApi,
   getStorageStatus,
-  testStorageConnection
+  testStorageConnection,
+  reconcileStorage,
+  importOrphan,
+  deleteOrphan,
+  bulkImportOrphans,
+  bulkDeleteOrphans
 } from '../lib/api'
 import usePolling from '../hooks/usePolling'
 
@@ -31,6 +37,18 @@ export default function VideosManager() {
   const [downloadResult, setDownloadResult] = useState(null)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [showErrorDetail, setShowErrorDetail] = useState(null)
+  
+  // Bulk delete state
+  const [selectedIds, setSelectedIds] = useState([])
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  
+  // Storage sync state
+  const [activeTab, setActiveTab] = useState('videos') // 'videos' or 'storage-sync'
+  const [syncData, setSyncData] = useState(null)
+  const [syncLoading, setSyncLoading] = useState(false)
+  const [selectedOrphans, setSelectedOrphans] = useState([])
+  const [orphanActionLoading, setOrphanActionLoading] = useState(null)
   
   const [formData, setFormData] = useState({
     videoUrl: '',
@@ -166,6 +184,118 @@ export default function VideosManager() {
     }
   }
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return
+    
+    setBulkDeleting(true)
+    try {
+      const result = await bulkDeleteVideos(selectedIds)
+      setSelectedIds([])
+      setShowBulkDeleteConfirm(false)
+      refresh()
+      if (result.errors && result.errors.length > 0) {
+        setError(`Deleted ${result.deleted} videos (${result.deletedFromStorage} from storage), but ${result.errors.length} failed`)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  // Storage Sync handlers
+  const handleReconcile = async () => {
+    setSyncLoading(true)
+    setError(null)
+    try {
+      const result = await reconcileStorage()
+      setSyncData(result)
+      setSelectedOrphans([])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSyncLoading(false)
+    }
+  }
+
+  const handleImportOrphan = async (key) => {
+    setOrphanActionLoading(key)
+    try {
+      await importOrphan(key)
+      // Refresh reconciliation data
+      await handleReconcile()
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setOrphanActionLoading(null)
+    }
+  }
+
+  const handleDeleteOrphan = async (key) => {
+    setOrphanActionLoading(key)
+    try {
+      await deleteOrphan(key)
+      // Refresh reconciliation data
+      await handleReconcile()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setOrphanActionLoading(null)
+    }
+  }
+
+  const handleBulkImportOrphans = async () => {
+    if (selectedOrphans.length === 0) return
+    setOrphanActionLoading('bulk-import')
+    try {
+      const result = await bulkImportOrphans(selectedOrphans)
+      if (result.failed > 0) {
+        setError(`Imported ${result.imported} orphans, ${result.failed} failed`)
+      }
+      setSelectedOrphans([])
+      await handleReconcile()
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setOrphanActionLoading(null)
+    }
+  }
+
+  const handleBulkDeleteOrphans = async () => {
+    if (selectedOrphans.length === 0) return
+    setOrphanActionLoading('bulk-delete')
+    try {
+      const result = await bulkDeleteOrphans(selectedOrphans)
+      if (result.failed > 0) {
+        setError(`Deleted ${result.deleted} orphans, ${result.failed} failed`)
+      }
+      setSelectedOrphans([])
+      await handleReconcile()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setOrphanActionLoading(null)
+    }
+  }
+
+  const toggleOrphanSelection = (key) => {
+    setSelectedOrphans(prev => 
+      prev.includes(key) 
+        ? prev.filter(k => k !== key)
+        : [...prev, key]
+    )
+  }
+
+  const toggleAllOrphans = () => {
+    if (syncData?.orphanFiles?.length === selectedOrphans.length) {
+      setSelectedOrphans([])
+    } else {
+      setSelectedOrphans(syncData?.orphanFiles?.map(o => o.key) || [])
+    }
+  }
+
   const columns = [
     {
       header: 'Video URL',
@@ -196,8 +326,14 @@ export default function VideosManager() {
       accessor: 'status',
       render: (row) => (
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge status={row.status} />
+            {row.autoImported && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400">Auto</span>
+            )}
+            {row.skippedUpload && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">Dedup</span>
+            )}
             {row.isProtected && (
               <span className="badge-warning text-xs">Protected</span>
             )}
@@ -295,7 +431,7 @@ export default function VideosManager() {
           <p className="text-surface-400 mt-1 text-sm sm:text-base">Manage extracted videos and S3 sync</p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3">
-          {storage?.configured && data?.stats?.byStatus?.pending > 0 && (
+          {activeTab === 'videos' && storage?.configured && data?.stats?.byStatus?.pending > 0 && (
             <button
               onClick={handleSyncAll}
               disabled={syncingAll}
@@ -304,24 +440,315 @@ export default function VideosManager() {
               {syncingAll ? 'Syncing...' : `Sync All (${data.stats.byStatus.pending})`}
             </button>
           )}
-          <button
-            onClick={() => {
-              setEditVideo(null)
-              setShowAddModal(true)
-            }}
-            className="btn-primary flex items-center gap-2 text-sm"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Video
-          </button>
+          {activeTab === 'videos' && (
+            <button
+              onClick={() => {
+                setEditVideo(null)
+                setShowAddModal(true)
+              }}
+              className="btn-primary flex items-center gap-2 text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Video
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 bg-surface-800/50 rounded-lg w-fit">
+        <button
+          onClick={() => setActiveTab('videos')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            activeTab === 'videos'
+              ? 'bg-primary-600 text-white'
+              : 'text-surface-400 hover:text-surface-200'
+          }`}
+        >
+          Videos
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('storage-sync')
+            if (!syncData && storage?.configured) {
+              handleReconcile()
+            }
+          }}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            activeTab === 'storage-sync'
+              ? 'bg-primary-600 text-white'
+              : 'text-surface-400 hover:text-surface-200'
+          }`}
+        >
+          Storage Sync
+        </button>
+      </div>
+
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 sm:p-4 text-red-400 text-sm">
-          {error}
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 sm:p-4 text-red-400 text-sm flex justify-between items-center">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">×</button>
+        </div>
+      )}
+
+      {/* Storage Sync Tab */}
+      {activeTab === 'storage-sync' && (
+        <div className="space-y-4">
+          {/* Auto-sync Info Banner */}
+          <div className="glass-card p-4 border-cyan-500/30 bg-cyan-500/5">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-cyan-400 font-medium">Auto-sync enabled</p>
+                <p className="text-surface-400 text-sm mt-1">
+                  Videos are automatically checked against S3 storage when detected. If a video already exists in S3, 
+                  it will be auto-imported as "synced" (marked with <span className="text-cyan-400">Auto</span> badge).
+                  This prevents duplicate uploads and saves storage space.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Storage Sync Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-surface-100">Storage Diagnostics</h2>
+              <p className="text-surface-400 text-sm mt-1">
+                Scan and reconcile for edge cases - orphan files or missing records
+              </p>
+            </div>
+            <button
+              onClick={handleReconcile}
+              disabled={syncLoading || !storage?.configured}
+              className="btn-secondary flex items-center gap-2"
+            >
+              {syncLoading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Scanning...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  Run Diagnostics
+                </>
+              )}
+            </button>
+          </div>
+
+          {!storage?.configured && (
+            <div className="glass-card p-6 text-center">
+              <svg className="w-12 h-12 mx-auto text-amber-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <p className="text-surface-300">S3 storage is not configured. Configure it to use storage sync features.</p>
+            </div>
+          )}
+
+          {storage?.configured && syncData && (
+            <>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                <div className="glass-card p-4 text-center">
+                  <p className="text-2xl font-bold text-surface-100 font-mono">{syncData.summary?.totalInS3 || 0}</p>
+                  <p className="text-xs text-surface-400">In S3</p>
+                </div>
+                <div className="glass-card p-4 text-center">
+                  <p className="text-2xl font-bold text-surface-100 font-mono">{syncData.summary?.syncedCount || 0}</p>
+                  <p className="text-xs text-emerald-400">Synced</p>
+                </div>
+                <div className="glass-card p-4 text-center border-amber-500/30">
+                  <p className="text-2xl font-bold text-amber-400 font-mono">{syncData.summary?.orphanCount || 0}</p>
+                  <p className="text-xs text-surface-400">Orphans</p>
+                </div>
+                <div className="glass-card p-4 text-center border-red-500/30">
+                  <p className="text-2xl font-bold text-red-400 font-mono">{syncData.summary?.missingCount || 0}</p>
+                  <p className="text-xs text-surface-400">Missing in S3</p>
+                </div>
+              </div>
+
+              {/* Orphan Files Section */}
+              {syncData.orphanFiles?.length > 0 && (
+                <div className="glass-card p-4 border-amber-500/30">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <div>
+                      <h3 className="text-lg font-medium text-amber-400">Orphan Files Found</h3>
+                      <p className="text-sm text-surface-400">
+                        Files in S3 not tracked locally. These may be from manual uploads or before auto-sync was enabled.
+                        Import to track them, or delete to free storage space.
+                      </p>
+                    </div>
+                    {selectedOrphans.length > 0 && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleBulkImportOrphans}
+                          disabled={orphanActionLoading === 'bulk-import'}
+                          className="btn-primary text-xs"
+                        >
+                          {orphanActionLoading === 'bulk-import' ? 'Importing...' : `Import (${selectedOrphans.length})`}
+                        </button>
+                        <button
+                          onClick={handleBulkDeleteOrphans}
+                          disabled={orphanActionLoading === 'bulk-delete'}
+                          className="btn-ghost text-xs text-red-400 hover:text-red-300"
+                        >
+                          {orphanActionLoading === 'bulk-delete' ? 'Deleting...' : `Delete (${selectedOrphans.length})`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-surface-700">
+                          <th className="text-left py-2 px-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedOrphans.length === syncData.orphanFiles.length}
+                              onChange={toggleAllOrphans}
+                              className="rounded border-surface-600"
+                            />
+                          </th>
+                          <th className="text-left py-2 px-3 text-surface-400 font-medium">S3 Key</th>
+                          <th className="text-left py-2 px-3 text-surface-400 font-medium">Size</th>
+                          <th className="text-left py-2 px-3 text-surface-400 font-medium">Video URL</th>
+                          <th className="text-right py-2 px-3 text-surface-400 font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {syncData.orphanFiles.map((orphan) => (
+                          <tr key={orphan.key} className="border-b border-surface-800 hover:bg-surface-800/50">
+                            <td className="py-2 px-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedOrphans.includes(orphan.key)}
+                                onChange={() => toggleOrphanSelection(orphan.key)}
+                                className="rounded border-surface-600"
+                              />
+                            </td>
+                            <td className="py-2 px-3">
+                              <a
+                                href={orphan.s3Url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary-400 hover:text-primary-300 truncate block max-w-[200px]"
+                                title={orphan.key}
+                              >
+                                {orphan.key}
+                              </a>
+                            </td>
+                            <td className="py-2 px-3 text-surface-400 whitespace-nowrap">
+                              {orphan.size ? `${(orphan.size / 1024 / 1024).toFixed(2)} MB` : '-'}
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="text-surface-500 truncate block max-w-[150px]" title={orphan.videoUrl}>
+                                {orphan.videoUrl || 'No metadata'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => handleImportOrphan(orphan.key)}
+                                  disabled={orphanActionLoading === orphan.key}
+                                  className="btn-secondary text-xs py-1 px-2"
+                                >
+                                  {orphanActionLoading === orphan.key ? '...' : 'Import'}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteOrphan(orphan.key)}
+                                  disabled={orphanActionLoading === orphan.key}
+                                  className="btn-ghost text-xs py-1 px-2 text-red-400 hover:text-red-300"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Missing in S3 Section */}
+              {syncData.missingInS3?.length > 0 && (
+                <div className="glass-card p-4 border-red-500/30">
+                  <h3 className="text-lg font-medium text-surface-100 mb-2">Missing in S3</h3>
+                  <p className="text-sm text-surface-400 mb-4">
+                    Videos marked as synced but no longer exist in S3. You may want to re-sync them.
+                  </p>
+                  <div className="space-y-2">
+                    {syncData.missingInS3.map((video) => (
+                      <div key={video.id} className="flex items-center justify-between bg-surface-800/50 rounded p-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-surface-200 truncate">{video.videoUrl}</p>
+                          <p className="text-xs text-surface-500">ID: {video.id}</p>
+                        </div>
+                        <StatusBadge status="error" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* All Synced Message */}
+              {syncData.summary?.orphanCount === 0 && syncData.summary?.missingCount === 0 && (
+                <div className="glass-card p-6 text-center border-emerald-500/30">
+                  <svg className="w-12 h-12 mx-auto text-emerald-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-emerald-400 font-medium">Storage is in sync!</p>
+                  <p className="text-surface-400 text-sm mt-1">No orphan files or missing records found.</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {storage?.configured && !syncData && !syncLoading && (
+            <div className="glass-card p-6 text-center">
+              <svg className="w-12 h-12 mx-auto text-surface-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <p className="text-surface-300">Click "Scan & Reconcile" to compare local tracker with S3 storage.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Videos Tab Content */}
+      {activeTab === 'videos' && (
+        <>
+      {/* Bulk Action Toolbar */}
+      {selectedIds.length > 0 && (
+        <div className="glass-card p-3 flex items-center justify-between">
+          <span className="text-surface-300 text-sm">
+            {selectedIds.length} video{selectedIds.length > 1 ? 's' : ''} selected
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelectedIds([])}
+              className="btn-ghost text-xs"
+            >
+              Clear Selection
+            </button>
+            <button
+              onClick={() => setShowBulkDeleteConfirm(true)}
+              className="btn-ghost text-xs text-red-400 hover:text-red-300"
+            >
+              Delete Selected
+            </button>
+          </div>
         </div>
       )}
 
@@ -338,14 +765,14 @@ export default function VideosManager() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-surface-100">S3 Storage</span>
                 <StatusBadge status={storage?.configured ? 'connected' : 'disconnected'} />
+                {storage?.configured && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400">Auto-dedup</span>
+                )}
               </div>
               {storage?.configured && (
                 <p className="text-xs sm:text-sm text-surface-400 mt-1 truncate">
                   {storage.endpoint} / {storage.bucket} / {storage.keyPrefix}
                 </p>
-              )}
-              {storage?.autoSync && (
-                <span className="badge-info text-xs mt-1">Auto-sync enabled</span>
               )}
             </div>
           </div>
@@ -383,13 +810,29 @@ export default function VideosManager() {
 
       {/* Stats */}
       {data?.stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-          {Object.entries(data.stats.byStatus).map(([status, count]) => (
-            <div key={status} className="glass-card p-3 sm:p-4 text-center">
-              <p className="text-lg sm:text-xl font-bold text-surface-100 font-mono">{count}</p>
-              <p className="text-xs sm:text-sm text-surface-400 capitalize">{status}</p>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            {Object.entries(data.stats.byStatus).map(([status, count]) => (
+              <div key={status} className="glass-card p-3 sm:p-4 text-center">
+                <p className="text-lg sm:text-xl font-bold text-surface-100 font-mono">{count}</p>
+                <p className="text-xs sm:text-sm text-surface-400 capitalize">{status}</p>
+              </div>
+            ))}
+          </div>
+          {(data.stats.autoImported > 0 || data.stats.skippedUpload > 0) && (
+            <div className="flex flex-wrap gap-3 text-xs">
+              {data.stats.autoImported > 0 && (
+                <span className="px-2 py-1 rounded bg-cyan-500/20 text-cyan-400">
+                  {data.stats.autoImported} auto-imported from S3
+                </span>
+              )}
+              {data.stats.skippedUpload > 0 && (
+                <span className="px-2 py-1 rounded bg-blue-500/20 text-blue-400">
+                  {data.stats.skippedUpload} uploads skipped (dedup)
+                </span>
+              )}
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -399,7 +842,12 @@ export default function VideosManager() {
         data={data?.videos || []}
         loading={loading}
         emptyMessage="No videos tracked yet"
+        selectable={true}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
       />
+        </>
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -645,6 +1093,18 @@ export default function VideosManager() {
           </div>
         )}
       </Modal>
+
+      {/* Bulk Delete Confirm */}
+      <ConfirmDialog
+        isOpen={showBulkDeleteConfirm}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title="Delete Selected Videos"
+        message={`Are you sure you want to delete ${selectedIds.length} video${selectedIds.length > 1 ? 's' : ''}? This will also delete them from S3 storage if synced.`}
+        confirmText={bulkDeleting ? 'Deleting...' : 'Delete'}
+        confirmDisabled={bulkDeleting}
+        variant="danger"
+      />
     </div>
   )
 }

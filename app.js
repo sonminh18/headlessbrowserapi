@@ -13,6 +13,7 @@ const { downloadVideo, cleanupTempFiles } = require("./lib/util/video-downloader
 const { createAdminRouter } = require("./lib/routes/admin");
 const { videoTracker, selectBestVideo } = require("./lib/util/video-tracker");
 const { urlTracker, URL_STATUS } = require("./lib/util/url-tracker");
+const { logEmitter } = require("./lib/util/log-emitter");
 
 // Set up chrome-headless-shell executable path if not already set
 try {
@@ -298,9 +299,11 @@ const formatVideoUrls = (videoUrls) => {
             return hasVideoExtension || hasVideoMimeType;
         })
         .map(video => {
-            // Only return url and isHLS properties
+            // Return url with originalUrl preserved for tracking
             const videoInfo = {
-                url: video.url
+                url: video.url,
+                originalUrl: video.url, // Always keep original URL for cache/tracking
+                mimeType: video.mimeType || ''
             };
             
             // Add isHLS flag for HLS videos
@@ -311,6 +314,46 @@ const formatVideoUrls = (videoUrls) => {
             
             return videoInfo;
         });
+};
+
+// Helper function to check AUTO_SYNC_VIDEOS env var (case-insensitive, trims whitespace)
+const isAutoSyncVideosEnabled = () => {
+    const value = (process.env.AUTO_SYNC_VIDEOS || '').toString().trim().toLowerCase();
+    return value === 'true' || value === '1' || value === 'yes';
+};
+
+// Helper function to generate video URLs HTML block
+// Output: <div id="hbapi-videos"><a href="..."></a></div>
+// XPath: //div[@id='hbapi-videos']/a/@href
+// CSS: #hbapi-videos a
+const generateVideoUrlsHtml = (videoUrls) => {
+    if (!videoUrls || videoUrls.length === 0) return '';
+    const links = videoUrls.map(v => `<a href="${v.url || v}"></a>`).join('\n');
+    return `\n<!-- HBAPI-VIDEO-URLS-START -->\n<div id="hbapi-videos" style="display:none">\n${links}\n</div>\n<!-- HBAPI-VIDEO-URLS-END -->\n`;
+};
+
+// Helper function to insert video URLs HTML INSIDE the body tag (before </body>)
+// This ensures crawlers like Crawlomatic can properly parse the content
+const insertVideoUrlsIntoHtml = (html, videoUrls) => {
+    if (!videoUrls || videoUrls.length === 0) return html;
+    
+    const videoBlock = generateVideoUrlsHtml(videoUrls);
+    if (!videoBlock) return html;
+    
+    // Try to insert before </body> (case-insensitive)
+    const bodyCloseRegex = /<\/body>/i;
+    if (bodyCloseRegex.test(html)) {
+        return html.replace(bodyCloseRegex, `${videoBlock}</body>`);
+    }
+    
+    // Try to insert before </html> if no </body> found
+    const htmlCloseRegex = /<\/html>/i;
+    if (htmlCloseRegex.test(html)) {
+        return html.replace(htmlCloseRegex, `${videoBlock}</html>`);
+    }
+    
+    // Fallback: append at the end if no closing tags found
+    return html + videoBlock;
 };
 
 // API endpoint for scraping
@@ -364,6 +407,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
         const cachedResult = await cache.get(cacheKey);
         if (cachedResult) {
             util.Logging.info(`Cache hit for ${url}`);
+            logEmitter.broadcast('info', 'Cache hit', { url });
             res.setHeader("X-Cache", "HIT");
             
             // Format response - always use raw HTML content from cache
@@ -380,57 +424,77 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                 const filteredVideoUrls = formatVideoUrls(cachedResult.videoUrls);
                 
                 if (filteredVideoUrls.length > 0) {
-                    // Check if any videos have been synced to CDN and replace URLs
+                    // Check if any videos have been synced to CDN and replace URLs for response
+                    // But always keep originalUrl for tracking
                     const allVideos = await videoTracker.getAll();
                     const enhancedVideoUrls = filteredVideoUrls.map(video => {
+                        const originalUrl = video.originalUrl || video.url;
                         // Find synced video record matching this URL
                         const syncedRecord = allVideos.find(v => 
-                            v.videoUrl === video.url && v.status === 'synced' && v.s3Url
+                            v.videoUrl === originalUrl && v.status === 'synced' && v.s3Url
                         );
                         if (syncedRecord) {
                             return {
                                 ...video,
-                                url: syncedRecord.s3Url,
-                                originalUrl: video.url,
+                                url: syncedRecord.s3Url, // CDN URL for client response
+                                originalUrl: originalUrl, // Always keep original URL
                                 synced: true
                             };
                         }
-                        return video;
+                        return {
+                            ...video,
+                            originalUrl: originalUrl // Ensure originalUrl is always present
+                        };
                     });
                     response.videoUrls = enhancedVideoUrls;
                 }
             }
             
             // Update URL status to done with cached result
+            // URL Tracker stores ORIGINAL URLs (for Admin UI "Videos Found" display)
             if (urlRecord) {
+                // Map to original URLs for tracking - Admin UI should show original URLs, not CDN URLs
+                const originalVideoUrls = (response.videoUrls || []).map(video => ({
+                    url: video.originalUrl || video.url, // Always use original URL for tracking
+                    mimeType: video.mimeType || '',
+                    isHLS: video.isHLS || false
+                }));
+                
                 const cachedResponse = {
                     htmlLength: cachedResult.html?.length || 0,
                     htmlPreview: cachedResult.html?.substring(0, 500) || '',
-                    videoUrls: response.videoUrls || [],
+                    videoUrls: originalVideoUrls, // Store ORIGINAL URLs, not CDN URLs
                     cached: true,
                     title: cachedResult.title || null
                 };
-                await urlTracker.updateStatus(urlRecord.id, URL_STATUS.DONE, null, cachedResponse);
+                await urlTracker.updateStatus(urlRecord.id, URL_STATUS.DONE, null, cachedResponse, cacheKey);
             }
             
-            // Track videos from cache - only sync the BEST video to avoid storage bloat
+            // Track ONLY the best video to avoid storage bloat (no need to append - already in cached HTML)
             if (response.videoUrls && response.videoUrls.length > 0) {
-                const autoSync = process.env.AUTO_SYNC_VIDEOS === 'true' && s3Storage.isConfigured();
+                const autoSyncEnabled = isAutoSyncVideosEnabled();
+                const autoSync = autoSyncEnabled && s3Storage.isConfigured();
                 
-                // Select best video for syncing
+                // NOTE: Video URLs are already appended to cached HTML, no need to append again
+                // The cached HTML contains original URLs; response.videoUrls may have CDN URLs if synced
+                
+                // Select best video for tracking (only track one video)
                 const bestVideo = selectBestVideo(response.videoUrls);
                 
-                for (const video of response.videoUrls) {
+                // Skip tracking if video is already synced (has CDN URL)
+                if (bestVideo && !bestVideo.synced) {
+                    // Use originalUrl if available (for synced videos), otherwise use url
+                    const originalVideoUrl = bestVideo.originalUrl || bestVideo.url;
+                    
                     const videoRecord = await videoTracker.addVideo({
-                        videoUrl: video.url,
+                        videoUrl: originalVideoUrl,
                         sourceUrl: url,
-                        mimeType: video.mimeType || 'video/mp4',
-                        isHLS: video.isHLS || false
+                        mimeType: bestVideo.mimeType || 'video/mp4',
+                        isHLS: bestVideo.isHLS || false
                     });
                     
-                    // Auto-sync ONLY the best video to S3 (don't block response)
-                    const isBestVideo = bestVideo && (video.url === bestVideo.url);
-                    if (autoSync && isBestVideo) {
+                    // Auto-sync best video to S3 (don't block response)
+                    if (autoSync) {
                         util.Logging.info(`Auto-sync triggered for BEST video ${videoRecord.id} from cache hit`);
                         videoTracker.syncVideo(videoRecord.id).catch(err => {
                             util.Logging.warn(`Auto-sync failed for video ${videoRecord.id}: ${err.message}`);
@@ -444,6 +508,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
 
         // Process the request
         util.Logging.info(`Processing request for ${url} using ${req.params.engine} engine`);
+        logEmitter.broadcast('info', 'Scrape started', { url, engine: req.params.engine });
         const engineInstance = engineModule.singleton();
         
         // Initialize res.locals
@@ -465,69 +530,20 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             
             // Cache the result if not already sent
             if (!res.headersSent && res.locals.content) {
-                // Create cache object including videos if present
-                const cacheObject = {
-                    html: res.locals.content
-                };
-                
-                if (res.locals.videoUrls && res.locals.videoUrls.length > 0) {
-                    // Clean and optimize video URLs before storing
-                    const cleanedVideoUrls = res.locals.videoUrls
-                        .filter(video => {
-                            // Validate URL is a video by extension and not an image
-                            const url = video.url || '';
-                            const lowercaseUrl = url.toLowerCase();
-                            
-                            // Skip URLs with image extensions
-                            if (lowercaseUrl.match(/\.(jpe?g|png|gif|bmp|webp)(\?.*)?$/i)) {
-                                return false;
-                            }
-                            
-                            // Accept only video and streaming URLs
-                            const hasVideoExtension = lowercaseUrl.match(/\.(mp4|webm|ogg|mov|avi|wmv|flv|mkv|m4v|mpeg|mpg|m3u8|mpd)(\?.*)?$/i);
-                            const hasVideoMimeType = (video.mimeType || '').startsWith('video/') || 
-                                                     (video.mimeType || '').includes('mpegURL') ||
-                                                     (video.mimeType || '').includes('dash+xml');
-                                             
-                            return hasVideoExtension || hasVideoMimeType;
-                        })
-                        .map(video => {
-                            // Only store url and mimeType for detection in cache
-                            const videoInfo = {
-                                url: video.url,
-                                mimeType: video.mimeType || '' // Keep mimeType for isHLS detection
-                            };
-                            return videoInfo;
-                        });
-                    
-                    if (cleanedVideoUrls.length > 0) {
-                        cacheObject.videoUrls = cleanedVideoUrls;
-                    }
-                }
-                
-                await cache.set(cacheKey, cacheObject);
                 res.setHeader("X-Cache", "MISS");
                 
-                // Format response - always return raw HTML content
-                const response = {
-                    html: res.locals.content,
-                    apicalls: lib.conf.API_CALLS_LIMIT,
-                    url: url
-                };
+                // Start building response
+                let finalHtml = res.locals.content;
+                let processedVideoUrls = [];
                 
-                // Include video URLs if found
+                // Process video URLs if found
                 if (res.locals.videoUrls && res.locals.videoUrls.length > 0) {
-                    // Process the video URLs using the helper function
-                    const filteredVideoUrls = formatVideoUrls(res.locals.videoUrls);
-                    
-                    if (filteredVideoUrls.length > 0) {
-                        response.videoUrls = filteredVideoUrls;
-                    }
+                    processedVideoUrls = formatVideoUrls(res.locals.videoUrls);
                 }
                 
-                // Upload video to S3 if requested
-                if (req.query.upload === 'true' && response.videoUrls && response.videoUrls.length > 0) {
-                    const video = response.videoUrls[0];
+                // Upload video to S3 if requested (before appending to HTML)
+                if (req.query.upload === 'true' && processedVideoUrls.length > 0) {
+                    const video = processedVideoUrls[0];
                     const tempFiles = [];
                     
                     try {
@@ -551,64 +567,139 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                             downloadResult.contentType
                         );
                         
-                        // Replace URL in response
+                        // Replace URL in processedVideoUrls
                         video.url = s3Url;
                         delete video.isHLS; // No longer HLS after conversion
                         
                         util.Logging.info(`Video uploaded to S3: ${s3Url}`);
                     } catch (err) {
                         util.Logging.error(`Video upload failed: ${err.message}`);
-                        response.uploadError = err.message;
                     } finally {
                         // Always cleanup temp files
                         await cleanupTempFiles(tempFiles);
                     }
                 }
                 
-                // Track videos if found - only sync the BEST video
-                if (response.videoUrls && response.videoUrls.length > 0) {
-                    const autoSync = process.env.AUTO_SYNC_VIDEOS === 'true' && s3Storage.isConfigured();
+                // ==================== Pre-generate CDN URL for BEST video only ====================
+                // HTML will contain OUR CDN URL (for crawlers)
+                // Response.videoUrls will contain ORIGINAL URLs found on page (for display)
+                const autoSyncEnabled = isAutoSyncVideosEnabled();
+                const autoSync = autoSyncEnabled && s3Storage.isConfigured();
+                let bestVideo = null;
+                let videoRecord = null;
+                let cdnUrl = null;
+                
+                // Track and pre-generate CDN URL for best video only
+                if (processedVideoUrls.length > 0) {
+                    // Select best video for tracking (only track one video)
+                    bestVideo = selectBestVideo(processedVideoUrls);
                     
-                    // Select best video for syncing to avoid storage bloat
-                    const bestVideo = selectBestVideo(response.videoUrls);
-                    
-                    for (const video of response.videoUrls) {
-                        const videoRecord = await videoTracker.addVideo({
-                            videoUrl: video.url,
+                    if (bestVideo && !bestVideo.synced) {
+                        const originalVideoUrl = bestVideo.originalUrl || bestVideo.url;
+                        
+                        // Add video to tracker
+                        videoRecord = await videoTracker.addVideo({
+                            videoUrl: originalVideoUrl,
                             sourceUrl: url,
-                            mimeType: video.mimeType || 'video/mp4',
-                            isHLS: video.isHLS || false
+                            mimeType: bestVideo.mimeType || 'video/mp4',
+                            isHLS: bestVideo.isHLS || false
                         });
                         
-                        // Auto-sync ONLY the best video to S3 (don't block response)
-                        const isBestVideo = bestVideo && (video.url === bestVideo.url);
-                        if (autoSync && !video.s3Url && isBestVideo) {
-                            util.Logging.info(`Auto-sync triggered for BEST video ${videoRecord.id}`);
-                            videoTracker.syncVideo(videoRecord.id).catch(err => {
-                                util.Logging.warn(`Auto-sync failed for video ${videoRecord.id}: ${err.message}`);
-                            });
+                        // Pre-generate CDN URL (deterministic based on original URL)
+                        // This URL will be valid after upload completes
+                        if (autoSync) {
+                            const extension = bestVideo.isHLS ? 'mp4' : 'mp4'; // HLS converts to MP4
+                            const s3Key = s3Storage.generateKey(originalVideoUrl, extension);
+                            cdnUrl = s3Storage.getPublicUrl(s3Key);
+                            
+                            util.Logging.info(`Pre-generated CDN URL for best video: ${cdnUrl}`);
                         }
                     }
                 }
                 
-                // Update URL status to done with scrape result
+                // Insert ONLY our CDN URL into HTML (for crawlers to consume)
+                // This is different from response.videoUrls which shows original URLs
+                if (autoSyncEnabled && cdnUrl) {
+                    const cdnVideoForHtml = [{ url: cdnUrl }];
+                    finalHtml = insertVideoUrlsIntoHtml(finalHtml, cdnVideoForHtml);
+                    util.Logging.info(`Inserted OUR CDN URL into HTML: ${cdnUrl}`);
+                }
+                
+                // Create cache object with FINAL HTML
+                const cacheObject = {
+                    html: finalHtml
+                };
+                
+                // Store ORIGINAL video URLs in cache (not CDN URLs)
+                // Use originalUrl because video.url may have been mutated by upload process
+                if (processedVideoUrls.length > 0) {
+                    cacheObject.videoUrls = processedVideoUrls.map(video => ({
+                        url: video.originalUrl || video.url, // Always use original URL
+                        mimeType: video.mimeType || ''
+                    }));
+                    // Also store the CDN URL separately for reference
+                    if (cdnUrl) {
+                        cacheObject.cdnUrl = cdnUrl;
+                    }
+                }
+                
+                // Save to cache
+                await cache.set(cacheKey, cacheObject);
+                
+                // Build response object
+                const response = {
+                    html: finalHtml,
+                    apicalls: lib.conf.API_CALLS_LIMIT,
+                    url: url
+                };
+                
+                // response.videoUrls = ORIGINAL URLs found on page (for Videos Found display in Admin UI)
+                // Use originalUrl because video.url may have been mutated by upload process
+                if (processedVideoUrls.length > 0) {
+                    response.videoUrls = processedVideoUrls.map(video => ({
+                        url: video.originalUrl || video.url, // Always use original URL for display
+                        mimeType: video.mimeType || '',
+                        isHLS: video.isHLS || false
+                    }));
+                }
+                
+                // Trigger async upload AFTER response is built (don't block response)
+                if (bestVideo && videoRecord && autoSync && !bestVideo.s3Url) {
+                    util.Logging.info(`Auto-sync triggered for BEST video ${videoRecord.id}`);
+                    videoTracker.syncVideo(videoRecord.id).catch(err => {
+                        util.Logging.warn(`Auto-sync failed for video ${videoRecord.id}: ${err.message}`);
+                    });
+                }
+                
+                // Update URL status to done with scrape result (include cacheKey for debug view)
                 if (urlRecord) {
-                    await urlTracker.updateStatus(urlRecord.id, URL_STATUS.DONE, null, response);
+                    await urlTracker.updateStatus(urlRecord.id, URL_STATUS.DONE, null, response, cacheKey);
                 }
                 
                 res.json(response);
                 // Done Process the request
                 util.Logging.info(`Response sent for ${url} using ${req.params.engine} engine`);
+                logEmitter.broadcast('info', 'Scrape completed', { 
+                    url, 
+                    htmlLength: response.html?.length || 0,
+                    videoCount: response.videoUrls?.length || 0,
+                    cached: false 
+                });
             }
         } catch (error) {
             clearTimeout(timeoutId);
             throw error;
         }
     } catch (error) {
-        // Update URL status to error
+        // Update URL status to error with snapshot URL if available
         if (urlRecord) {
-            await urlTracker.updateStatus(urlRecord.id, URL_STATUS.ERROR, error.message);
+            await urlTracker.updateStatus(urlRecord.id, URL_STATUS.ERROR, error.message, null, null, error.snapshotUrl);
         }
+        logEmitter.broadcast('error', 'Scrape failed', { 
+            url: req.query.url, 
+            error: error.message,
+            snapshotUrl: error.snapshotUrl 
+        });
         next(error);
     }
 });
@@ -754,6 +845,7 @@ if (process.env.NODE_ENV !== "test") {
             // Start listening
             app.listen(lib.conf.PORT, lib.conf.HOST, () => {
                 util.Logging.info(`Listening on ${lib.conf.HOST}:${lib.conf.PORT}`);
+                util.Logging.info(`AUTO_SYNC_VIDEOS=${process.env.AUTO_SYNC_VIDEOS} (enabled=${isAutoSyncVideosEnabled()})`);
                 lib.init();
             });
         } catch (err) {
