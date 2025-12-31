@@ -1,4 +1,46 @@
-export default function DataTable({ columns, data, loading, emptyMessage = 'No data available' }) {
+import { useState, useEffect } from 'react'
+
+export default function DataTable({ 
+  columns, 
+  data, 
+  loading, 
+  emptyMessage = 'No data available',
+  selectable = false,
+  selectedIds = [],
+  onSelectionChange = () => {}
+}) {
+  const [localSelected, setLocalSelected] = useState(new Set(selectedIds))
+
+  // Sync with external selectedIds prop
+  useEffect(() => {
+    setLocalSelected(new Set(selectedIds))
+  }, [selectedIds])
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const allIds = data.map(row => row.id)
+      setLocalSelected(new Set(allIds))
+      onSelectionChange(allIds)
+    } else {
+      setLocalSelected(new Set())
+      onSelectionChange([])
+    }
+  }
+
+  const handleSelectRow = (id) => {
+    const newSelected = new Set(localSelected)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setLocalSelected(newSelected)
+    onSelectionChange(Array.from(newSelected))
+  }
+
+  const isAllSelected = data && data.length > 0 && localSelected.size === data.length
+  const isIndeterminate = localSelected.size > 0 && localSelected.size < (data?.length || 0)
+
   if (loading) {
     return (
       <div className="glass-card overflow-hidden">
@@ -31,6 +73,20 @@ export default function DataTable({ columns, data, loading, emptyMessage = 'No d
         <table className="w-full">
           <thead>
             <tr className="border-b border-surface-800">
+              {selectable && (
+                <th className="px-4 py-4 w-12">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    ref={el => {
+                      if (el) el.indeterminate = isIndeterminate
+                    }}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 rounded border-surface-600 bg-surface-800 text-primary-500 
+                               focus:ring-primary-500 focus:ring-offset-0 focus:ring-2 cursor-pointer"
+                  />
+                </th>
+              )}
               {columns.map((column, index) => (
                 <th
                   key={index}
@@ -46,8 +102,21 @@ export default function DataTable({ columns, data, loading, emptyMessage = 'No d
             {data.map((row, rowIndex) => (
               <tr
                 key={row.id || rowIndex}
-                className="hover:bg-surface-800/30 transition-colors"
+                className={`hover:bg-surface-800/30 transition-colors ${
+                  selectable && localSelected.has(row.id) ? 'bg-primary-500/10' : ''
+                }`}
               >
+                {selectable && (
+                  <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={localSelected.has(row.id)}
+                      onChange={() => handleSelectRow(row.id)}
+                      className="w-4 h-4 rounded border-surface-600 bg-surface-800 text-primary-500 
+                                 focus:ring-primary-500 focus:ring-offset-0 focus:ring-2 cursor-pointer"
+                    />
+                  </td>
+                )}
                 {columns.map((column, colIndex) => (
                   <td
                     key={colIndex}
@@ -64,4 +133,3 @@ export default function DataTable({ columns, data, loading, emptyMessage = 'No d
     </div>
   )
 }
-

@@ -2,7 +2,8 @@ import { useState, useCallback } from 'react'
 import DataTable from '../components/DataTable'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
-import { getUrls, getUrlDetails, addUrl, rescrapeUrl, cancelUrl, deleteUrl } from '../lib/api'
+import ConfirmDialog from '../components/ConfirmDialog'
+import { getUrls, getUrlDetails, addUrl, rescrapeUrl, cancelUrl, deleteUrl, bulkDeleteUrls, getUrlCachedResponse } from '../lib/api'
 import usePolling from '../hooks/usePolling'
 
 export default function URLs() {
@@ -17,6 +18,20 @@ export default function URLs() {
   const [newUrl, setNewUrl] = useState('')
   const [adding, setAdding] = useState(false)
   const [actionLoading, setActionLoading] = useState(null)
+  
+  // Bulk delete state
+  const [selectedIds, setSelectedIds] = useState([])
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  
+  // Cached response tab state
+  const [activeTab, setActiveTab] = useState('overview')
+  const [cachedResponse, setCachedResponse] = useState(null)
+  const [cachedLoading, setCachedLoading] = useState(false)
+  
+  // Snapshot modal state
+  const [showSnapshotModal, setShowSnapshotModal] = useState(false)
+  const [snapshotUrl, setSnapshotUrl] = useState(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -52,6 +67,8 @@ export default function URLs() {
   const handleViewDetails = async (id) => {
     setViewLoading(true)
     setShowViewModal(true)
+    setActiveTab('overview')
+    setCachedResponse(null)
     try {
       const details = await getUrlDetails(id)
       setViewData(details)
@@ -61,6 +78,25 @@ export default function URLs() {
     } finally {
       setViewLoading(false)
     }
+  }
+  
+  const loadCachedResponse = async (id) => {
+    setCachedLoading(true)
+    try {
+      const data = await getUrlCachedResponse(id)
+      setCachedResponse(data)
+    } catch (err) {
+      setCachedResponse({ error: err.message })
+    } finally {
+      setCachedLoading(false)
+    }
+  }
+
+  const handleCloseViewModal = () => {
+    setShowViewModal(false)
+    setViewData(null)
+    setActiveTab('overview')
+    setCachedResponse(null)
   }
 
   const handleCancel = async (id) => {
@@ -98,6 +134,30 @@ export default function URLs() {
       setActionLoading(null)
     }
   }
+  
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return
+    
+    setBulkDeleting(true)
+    try {
+      const result = await bulkDeleteUrls(selectedIds)
+      setSelectedIds([])
+      setShowBulkDeleteConfirm(false)
+      refresh()
+      if (result.failed && result.failed.length > 0) {
+        setError(`Deleted ${result.deleted} URLs, but ${result.failed.length} failed`)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+  
+  const handleViewSnapshot = (url) => {
+    setSnapshotUrl(url)
+    setShowSnapshotModal(true)
+  }
 
   const formatDuration = (record) => {
     if (!record.startedAt) return '-'
@@ -129,7 +189,19 @@ export default function URLs() {
     {
       header: 'Status',
       accessor: 'status',
-      render: (row) => <StatusBadge status={row.status} />
+      render: (row) => (
+        <div className="flex flex-col gap-1">
+          <StatusBadge status={row.status} />
+          {row.status === 'error' && row.error && (
+            <span 
+              className="text-xs text-red-400 truncate max-w-[150px] cursor-help"
+              title={row.error}
+            >
+              {row.error.length > 30 ? row.error.substring(0, 30) + '...' : row.error}
+            </span>
+          )}
+        </div>
+      )
     },
     {
       header: 'Result',
@@ -142,6 +214,9 @@ export default function URLs() {
                 <span className="badge-info">
                   {row.result.videoUrls.length} video{row.result.videoUrls.length > 1 ? 's' : ''}
                 </span>
+              )}
+              {row.result.cached && (
+                <span className="badge-neutral text-xs">cached</span>
               )}
             </>
           ) : (
@@ -168,6 +243,15 @@ export default function URLs() {
               className="btn-primary text-xs py-1 px-2"
             >
               View
+            </button>
+          )}
+          {row.snapshotUrl && (
+            <button
+              onClick={() => handleViewSnapshot(row.snapshotUrl)}
+              className="btn-secondary text-xs py-1 px-2"
+              title="View error snapshot"
+            >
+              📷
             </button>
           )}
           {(row.status === 'done' || row.status === 'error') && (
@@ -222,8 +306,32 @@ export default function URLs() {
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 sm:p-4 text-red-400 text-sm">
-          {error}
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 sm:p-4 text-red-400 text-sm flex justify-between items-center">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">×</button>
+        </div>
+      )}
+
+      {/* Bulk Action Toolbar */}
+      {selectedIds.length > 0 && (
+        <div className="glass-card p-3 flex items-center justify-between">
+          <span className="text-surface-300 text-sm">
+            {selectedIds.length} URL{selectedIds.length > 1 ? 's' : ''} selected
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelectedIds([])}
+              className="btn-ghost text-xs"
+            >
+              Clear Selection
+            </button>
+            <button
+              onClick={() => setShowBulkDeleteConfirm(true)}
+              className="btn-ghost text-xs text-red-400 hover:text-red-300"
+            >
+              Delete Selected
+            </button>
+          </div>
         </div>
       )}
 
@@ -265,6 +373,9 @@ export default function URLs() {
         data={data?.urls || []}
         loading={loading}
         emptyMessage="No URLs tracked yet"
+        selectable={true}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
       />
 
       {/* Add URL Modal */}
@@ -309,10 +420,7 @@ export default function URLs() {
       {/* View Details Modal */}
       <Modal
         isOpen={showViewModal}
-        onClose={() => {
-          setShowViewModal(false)
-          setViewData(null)
-        }}
+        onClose={handleCloseViewModal}
         title="Scrape Result"
         size="lg"
       >
@@ -322,95 +430,226 @@ export default function URLs() {
           </div>
         ) : viewData ? (
           <div className="space-y-4">
-            {/* URL Info */}
-            <div className="glass-card p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-surface-400">URL</span>
-                <a
-                  href={viewData.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary-400 hover:text-primary-300 text-sm truncate max-w-[300px]"
-                >
-                  {viewData.url}
-                </a>
-              </div>
-              {viewData.result?.title && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-surface-400">Title</span>
-                  <span className="text-surface-200 text-sm truncate max-w-[300px]">
-                    {viewData.result.title}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-surface-400">Status</span>
-                <StatusBadge status={viewData.status} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-surface-400">HTML Size</span>
-                <span className="text-surface-200 font-mono text-sm">
-                  {viewData.result?.htmlLength 
-                    ? `${(viewData.result.htmlLength / 1024).toFixed(2)} KB` 
-                    : '-'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-surface-400">Cached</span>
-                <span className="text-surface-200 text-sm">
-                  {viewData.result?.cached ? 'Yes' : 'No'}
-                </span>
-              </div>
+            {/* Tab Navigation */}
+            <div className="flex border-b border-surface-700">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`px-4 py-2 text-sm font-medium ${activeTab === 'overview' 
+                  ? 'border-b-2 border-primary-500 text-primary-400' 
+                  : 'text-surface-400 hover:text-surface-300'}`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('cached')
+                  if (!cachedResponse && viewData?.id) {
+                    loadCachedResponse(viewData.id)
+                  }
+                }}
+                className={`px-4 py-2 text-sm font-medium ${activeTab === 'cached' 
+                  ? 'border-b-2 border-primary-500 text-primary-400' 
+                  : 'text-surface-400 hover:text-surface-300'}`}
+              >
+                Cached Response
+              </button>
             </div>
 
-            {/* Videos */}
-            {viewData.result?.videoUrls?.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-surface-300 mb-2">
-                  Videos Found ({viewData.result.videoUrls.length})
-                </h4>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {viewData.result.videoUrls.map((video, index) => (
-                    <div key={index} className="glass-card p-3 text-sm">
-                      <a
-                        href={video.url || video}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary-400 hover:text-primary-300 break-all"
-                      >
-                        {video.url || video}
-                      </a>
-                      {video.mimeType && (
-                        <span className="ml-2 badge-neutral text-xs">{video.mimeType}</span>
-                      )}
-                      {video.isHLS && (
-                        <span className="ml-2 badge-warning text-xs">HLS</span>
-                      )}
+            {/* Tab Content */}
+            {activeTab === 'overview' ? (
+              <>
+                {/* URL Info */}
+                <div className="glass-card p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-surface-400">URL</span>
+                    <a
+                      href={viewData.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary-400 hover:text-primary-300 text-sm truncate max-w-[300px]"
+                    >
+                      {viewData.url}
+                    </a>
+                  </div>
+                  {viewData.result?.title && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-surface-400">Title</span>
+                      <span className="text-surface-200 text-sm truncate max-w-[300px]">
+                        {viewData.result.title}
+                      </span>
                     </div>
-                  ))}
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-surface-400">Status</span>
+                    <StatusBadge status={viewData.status} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-surface-400">HTML Size</span>
+                    <span className="text-surface-200 font-mono text-sm">
+                      {viewData.result?.htmlLength 
+                        ? `${(viewData.result.htmlLength / 1024).toFixed(2)} KB` 
+                        : '-'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-surface-400">Cached</span>
+                    <span className="text-surface-200 text-sm">
+                      {viewData.result?.cached ? 'Yes' : 'No'}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {/* HTML Preview */}
-            {viewData.result?.htmlPreview && (
-              <div>
-                <h4 className="text-sm font-medium text-surface-300 mb-2">HTML Preview</h4>
-                <pre className="glass-card p-3 text-xs font-mono text-surface-400 overflow-x-auto max-h-48 whitespace-pre-wrap break-all">
-                  {viewData.result.htmlPreview}...
-                </pre>
-              </div>
-            )}
+                {/* Videos */}
+                {viewData.result?.videoUrls?.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-surface-300 mb-2">
+                      Videos Found ({viewData.result.videoUrls.length})
+                    </h4>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {viewData.result.videoUrls.map((video, index) => (
+                        <div key={index} className="glass-card p-3 text-sm">
+                          <a
+                            href={video.url || video}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary-400 hover:text-primary-300 break-all"
+                          >
+                            {video.url || video}
+                          </a>
+                          {video.mimeType && (
+                            <span className="ml-2 badge-neutral text-xs">{video.mimeType}</span>
+                          )}
+                          {video.isHLS && (
+                            <span className="ml-2 badge-warning text-xs">HLS</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            {/* Error */}
-            {viewData.error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
-                <strong>Error:</strong> {viewData.error}
+                {/* HTML Preview */}
+                {viewData.result?.htmlPreview && (
+                  <div>
+                    <h4 className="text-sm font-medium text-surface-300 mb-2">HTML Preview</h4>
+                    <pre className="glass-card p-3 text-xs font-mono text-surface-400 overflow-x-auto max-h-48 whitespace-pre-wrap break-all">
+                      {viewData.result.htmlPreview}...
+                    </pre>
+                  </div>
+                )}
+
+                {/* Error */}
+                {viewData.error && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+                    <strong>Error:</strong> {viewData.error}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-4">
+                {cachedLoading ? (
+                  <div className="text-center py-8 text-surface-400">Loading cached response...</div>
+                ) : cachedResponse?.error ? (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-400">
+                    {cachedResponse.error}
+                    {cachedResponse.hint && (
+                      <p className="text-xs mt-1 text-surface-500">{cachedResponse.hint}</p>
+                    )}
+                  </div>
+                ) : cachedResponse ? (
+                  <>
+                    {/* Cache Info */}
+                    <div className="glass-card p-4 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-surface-400 text-sm">Cache Key</span>
+                        <code className="text-xs text-surface-300 max-w-[300px] truncate" title={cachedResponse.cacheKey}>
+                          {cachedResponse.cacheKey}
+                        </code>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-surface-400 text-sm">HTML Size</span>
+                        <span className="text-surface-200">
+                          {(cachedResponse.data?.htmlLength / 1024).toFixed(2)} KB
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* HTML Content */}
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <h4 className="text-sm font-medium text-surface-300">HTML Content</h4>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(cachedResponse.data?.html || '')
+                          }}
+                          className="btn-ghost text-xs"
+                        >
+                          Copy HTML
+                        </button>
+                      </div>
+                      <pre className="glass-card bg-black/60 p-4 text-xs font-mono text-surface-400 
+                                      overflow-auto max-h-[400px] whitespace-pre-wrap break-all">
+                        {cachedResponse.data?.html || 'No HTML content'}
+                      </pre>
+                    </div>
+                    
+                    {/* Video URLs if any */}
+                    {cachedResponse.data?.videoUrls?.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-surface-300 mb-2">
+                          Cached Video URLs ({cachedResponse.data.videoUrls.length})
+                        </h4>
+                        <div className="space-y-1">
+                          {cachedResponse.data.videoUrls.map((v, i) => (
+                            <div key={i} className="glass-card p-2 text-xs">
+                              <a href={v.url} target="_blank" rel="noopener noreferrer" className="text-primary-400 break-all">
+                                {v.url}
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : null}
               </div>
             )}
           </div>
         ) : null}
       </Modal>
+
+      {/* Snapshot Modal */}
+      <Modal
+        isOpen={showSnapshotModal}
+        onClose={() => {
+          setShowSnapshotModal(false)
+          setSnapshotUrl(null)
+        }}
+        title="Error Snapshot"
+        size="lg"
+      >
+        {snapshotUrl && (
+          <div className="text-center">
+            <img 
+              src={snapshotUrl} 
+              alt="Error snapshot" 
+              className="max-w-full rounded-lg border border-surface-700"
+            />
+          </div>
+        )}
+      </Modal>
+
+      {/* Bulk Delete Confirm */}
+      <ConfirmDialog
+        isOpen={showBulkDeleteConfirm}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title="Delete Selected URLs"
+        message={`Are you sure you want to delete ${selectedIds.length} URL${selectedIds.length > 1 ? 's' : ''}? This action cannot be undone.`}
+        confirmText={bulkDeleting ? 'Deleting...' : 'Delete'}
+        confirmDisabled={bulkDeleting}
+        variant="danger"
+      />
     </div>
   )
 }
