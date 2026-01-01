@@ -53,7 +53,11 @@ export const getUrlCachedResponse = (id) => request(`/urls/${id}/response`)
 
 // Videos
 export const getVideos = (params = {}) => {
-  const query = new URLSearchParams(params).toString()
+  // Filter out null/undefined params
+  const filteredParams = Object.fromEntries(
+    Object.entries(params).filter(([_, v]) => v != null && v !== '')
+  )
+  const query = new URLSearchParams(filteredParams).toString()
   return request(`/videos${query ? `?${query}` : ''}`)
 }
 export const addVideo = (data) => request('/videos', { method: 'POST', body: JSON.stringify(data) })
@@ -63,9 +67,40 @@ export const bulkDeleteVideos = (ids, keepStorage = false) => request('/videos/b
 export const syncVideo = (id) => request(`/videos/${id}/sync`, { method: 'POST' })
 export const syncAllVideos = () => request('/videos/sync-all', { method: 'POST' })
 export const downloadVideo = (id) => request(`/videos/${id}/download`, { method: 'POST' })
-export const reuploadVideo = (id) => request(`/videos/${id}/reupload`, { method: 'POST' })
-export const bulkReuploadVideos = (ids) => request('/videos/bulk-reupload', { method: 'POST', body: JSON.stringify({ ids }) })
+export const reuploadVideo = (id, options = {}) => request(`/videos/${id}/reupload`, { method: 'POST', body: JSON.stringify(options) })
+export const bulkReuploadVideos = (ids, options = {}) => request('/videos/bulk-reupload', { method: 'POST', body: JSON.stringify({ ids, ...options }) })
 export const resetStuckUploads = (timeoutMinutes = 10) => request('/videos/reset-stuck', { method: 'POST', body: JSON.stringify({ timeoutMinutes }) })
+export const bulkSyncVideos = (ids) => request('/videos/bulk-sync', { method: 'POST', body: JSON.stringify({ ids }) })
+export const retryFailedVideos = (options = {}) => request('/videos/retry-failed', { method: 'POST', body: JSON.stringify(options) })
+
+// Export videos to CSV/JSON
+export const exportVideos = async (format = 'csv', params = {}) => {
+  const filteredParams = Object.fromEntries(
+    Object.entries(params).filter(([_, v]) => v != null && v !== '')
+  )
+  const query = new URLSearchParams({ ...filteredParams, format }).toString()
+  return request(`/videos/export?${query}`)
+}
+
+// Upload Queue
+export const getUploadQueueStatus = (params = {}) => {
+  const queryParams = new URLSearchParams()
+  if (params.pendingPage) queryParams.set('pendingPage', params.pendingPage)
+  if (params.pendingLimit) queryParams.set('pendingLimit', params.pendingLimit)
+  if (params.completedPage) queryParams.set('completedPage', params.completedPage)
+  if (params.completedLimit) queryParams.set('completedLimit', params.completedLimit)
+  const query = queryParams.toString()
+  return request(`/upload-queue/status${query ? `?${query}` : ''}`)
+}
+export const addToUploadQueue = (ids, priority = 0) => request('/upload-queue/add', { method: 'POST', body: JSON.stringify({ ids, priority }) })
+export const pauseUpload = (id) => request(`/upload-queue/${id}/pause`, { method: 'POST' })
+export const resumeUpload = (id) => request(`/upload-queue/${id}/resume`, { method: 'POST' })
+export const cancelUpload = (id) => request(`/upload-queue/${id}/cancel`, { method: 'POST' })
+export const setUploadPriority = (id, priority) => request(`/upload-queue/${id}/priority`, { method: 'POST', body: JSON.stringify({ priority }) })
+export const pauseAllUploads = () => request('/upload-queue/pause-all', { method: 'POST' })
+export const resumeAllUploads = () => request('/upload-queue/resume-all', { method: 'POST' })
+export const clearUploadHistory = () => request('/upload-queue/clear', { method: 'POST' })
+export const resetAllUploads = () => request('/upload-queue/reset-all', { method: 'POST' })
 
 // Storage
 export const getStorageStatus = () => request('/storage/status')
@@ -74,7 +109,7 @@ export const testStorageConnection = () => request('/storage/test', { method: 'P
 // Storage Sync
 export const getStorageSyncStatus = () => request('/storage/sync/status')
 export const scanStorage = () => request('/storage/scan', { method: 'POST' })
-export const reconcileStorage = () => request('/storage/reconcile')
+export const reconcileStorage = (forceRefresh = false) => request(`/storage/reconcile${forceRefresh ? '?forceRefresh=true' : ''}`)
 export const getOrphanFiles = () => request('/storage/orphans')
 export const importOrphan = (key) => request('/storage/orphans/import', { 
   method: 'POST', 

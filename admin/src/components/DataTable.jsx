@@ -9,16 +9,35 @@ export default function DataTable({
   selectable = false,
   selectedIds = [],
   onSelectionChange = () => {},
+  // Select all across pages
+  selectAllAcrossPages = false,
+  onSelectAllAcrossPages = null,
+  totalSelectableCount = 0,
   // Pagination props
   pagination = null,
   onPageChange = () => {}
 }) {
   const [localSelected, setLocalSelected] = useState(new Set(selectedIds))
+  const [showSelectAllBanner, setShowSelectAllBanner] = useState(false)
 
   // Sync with external selectedIds prop
   useEffect(() => {
     setLocalSelected(new Set(selectedIds))
   }, [selectedIds])
+
+  // Check if current page is fully selected
+  useEffect(() => {
+    if (!data || data.length === 0) {
+      setShowSelectAllBanner(false)
+      return
+    }
+    
+    const allCurrentPageSelected = data.every(row => localSelected.has(row.id))
+    const hasMorePages = pagination && pagination.totalPages > 1
+    const notAllSelected = totalSelectableCount > 0 && localSelected.size < totalSelectableCount
+    
+    setShowSelectAllBanner(allCurrentPageSelected && hasMorePages && notAllSelected && !selectAllAcrossPages)
+  }, [data, localSelected, pagination, selectAllAcrossPages, totalSelectableCount])
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
@@ -28,6 +47,10 @@ export default function DataTable({
     } else {
       setLocalSelected(new Set())
       onSelectionChange([])
+      // Clear select all across pages if it was active
+      if (selectAllAcrossPages && onSelectAllAcrossPages) {
+        onSelectAllAcrossPages(false)
+      }
     }
   }
 
@@ -35,6 +58,10 @@ export default function DataTable({
     const newSelected = new Set(localSelected)
     if (newSelected.has(id)) {
       newSelected.delete(id)
+      // Clear select all across pages if deselecting
+      if (selectAllAcrossPages && onSelectAllAcrossPages) {
+        onSelectAllAcrossPages(false)
+      }
     } else {
       newSelected.add(id)
     }
@@ -42,8 +69,17 @@ export default function DataTable({
     onSelectionChange(Array.from(newSelected))
   }
 
-  const isAllSelected = data && data.length > 0 && localSelected.size === data.length
-  const isIndeterminate = localSelected.size > 0 && localSelected.size < (data?.length || 0)
+  const handleSelectAllAcrossPages = () => {
+    if (onSelectAllAcrossPages) {
+      onSelectAllAcrossPages(true)
+    }
+    setShowSelectAllBanner(false)
+  }
+
+  const isAllSelected = data && data.length > 0 && (
+    selectAllAcrossPages || data.every(row => localSelected.has(row.id))
+  )
+  const isIndeterminate = !selectAllAcrossPages && localSelected.size > 0 && !isAllSelected
 
   if (loading) {
     return (
@@ -73,6 +109,39 @@ export default function DataTable({
 
   return (
     <div className="glass-card overflow-hidden">
+      {/* Select all across pages banner */}
+      {showSelectAllBanner && onSelectAllAcrossPages && (
+        <div className="bg-primary-500/10 border-b border-primary-500/30 px-4 py-2 text-sm flex items-center justify-center gap-2">
+          <span className="text-surface-300">
+            All {data.length} items on this page are selected.
+          </span>
+          <button
+            onClick={handleSelectAllAcrossPages}
+            className="text-primary-400 hover:text-primary-300 font-medium underline"
+          >
+            Select all {totalSelectableCount} matching items
+          </button>
+        </div>
+      )}
+      
+      {/* Select all across pages active indicator */}
+      {selectAllAcrossPages && (
+        <div className="bg-primary-500/20 border-b border-primary-500/30 px-4 py-2 text-sm flex items-center justify-center gap-2">
+          <span className="text-primary-300 font-medium">
+            All {totalSelectableCount} matching items are selected.
+          </span>
+          <button
+            onClick={() => {
+              onSelectionChange([])
+              onSelectAllAcrossPages?.(false)
+            }}
+            className="text-surface-400 hover:text-surface-200 underline"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
