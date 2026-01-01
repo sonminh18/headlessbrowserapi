@@ -63,6 +63,7 @@ export const bulkDeleteVideos = (ids, keepStorage = false) => request('/videos/b
 export const syncVideo = (id) => request(`/videos/${id}/sync`, { method: 'POST' })
 export const syncAllVideos = () => request('/videos/sync-all', { method: 'POST' })
 export const downloadVideo = (id) => request(`/videos/${id}/download`, { method: 'POST' })
+export const reuploadVideo = (id) => request(`/videos/${id}/reupload`, { method: 'POST' })
 
 // Storage
 export const getStorageStatus = () => request('/storage/status')

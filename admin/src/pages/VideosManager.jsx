@@ -3,6 +3,7 @@ import DataTable from '../components/DataTable'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
+import SearchInput from '../components/SearchInput'
 import {
   getVideos,
   addVideo,
@@ -12,6 +13,7 @@ import {
   syncVideo,
   syncAllVideos,
   downloadVideo as downloadVideoApi,
+  reuploadVideo,
   getStorageStatus,
   testStorageConnection,
   reconcileStorage,
@@ -28,6 +30,10 @@ export default function VideosManager() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [limit] = useState(20)
+  const [pagination, setPagination] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [editVideo, setEditVideo] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -59,12 +65,16 @@ export default function VideosManager() {
 
   const fetchData = useCallback(async () => {
     try {
-      const params = filter ? { status: filter } : {}
+      const params = { page, limit }
+      if (filter) params.status = filter
+      if (search) params.search = search
+      
       const [videosResult, storageResult] = await Promise.all([
         getVideos(params),
         getStorageStatus()
       ])
       setData(videosResult)
+      setPagination(videosResult.pagination)
       setStorage(storageResult)
       setError(null)
     } catch (err) {
@@ -72,7 +82,7 @@ export default function VideosManager() {
     } finally {
       setLoading(false)
     }
-  }, [filter])
+  }, [filter, search, page, limit])
 
   const { refresh } = usePolling(fetchData, 10000)
 
@@ -153,6 +163,18 @@ export default function VideosManager() {
       refresh() // Refresh to show updated download status
     } catch (err) {
       setDownloadResult({ success: false, error: err.message })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleReupload = async (id) => {
+    setActionLoading(`reupload-${id}`)
+    try {
+      await reuploadVideo(id)
+      refresh()
+    } catch (err) {
+      setError(err.message)
     } finally {
       setActionLoading(null)
     }
@@ -370,7 +392,14 @@ export default function VideosManager() {
       accessor: 'createdAt',
       render: (row) => (
         <span className="whitespace-nowrap text-xs sm:text-sm">
-          {new Date(row.createdAt).toLocaleDateString()}
+          {new Date(row.createdAt).toLocaleString('vi-VN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          })}
         </span>
       )
     },
@@ -397,6 +426,15 @@ export default function VideosManager() {
               className="btn-primary text-xs py-1 px-2"
             >
               Sync
+            </button>
+          )}
+          {(row.status === 'synced' || row.status === 'error') && storage?.configured && (
+            <button
+              onClick={() => handleReupload(row.id)}
+              disabled={actionLoading === `reupload-${row.id}`}
+              className="btn-secondary text-xs py-1 px-2"
+            >
+              {actionLoading === `reupload-${row.id}` ? '...' : 'Re-upload'}
             </button>
           )}
           <button
@@ -790,9 +828,22 @@ export default function VideosManager() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 sm:gap-4">
+        <SearchInput
+          value={search}
+          onChange={(value) => {
+            setSearch(value)
+            setPage(1) // Reset to first page on search
+          }}
+          placeholder="Search videos..."
+          className="w-full sm:w-64"
+        />
+        
         <select
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={(e) => {
+            setFilter(e.target.value)
+            setPage(1) // Reset to first page on filter change
+          }}
           className="input w-full sm:w-auto sm:max-w-xs"
         >
           <option value="">All Status</option>
@@ -845,6 +896,8 @@ export default function VideosManager() {
         selectable={true}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
+        pagination={pagination}
+        onPageChange={setPage}
       />
         </>
       )}

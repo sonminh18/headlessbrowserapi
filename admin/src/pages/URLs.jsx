@@ -3,6 +3,7 @@ import DataTable from '../components/DataTable'
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
+import SearchInput from '../components/SearchInput'
 import { getUrls, getUrlDetails, addUrl, rescrapeUrl, cancelUrl, deleteUrl, bulkDeleteUrls, getUrlCachedResponse } from '../lib/api'
 import usePolling from '../hooks/usePolling'
 
@@ -11,6 +12,10 @@ export default function URLs() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [limit] = useState(20)
+  const [pagination, setPagination] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
   const [viewData, setViewData] = useState(null)
@@ -35,16 +40,20 @@ export default function URLs() {
 
   const fetchData = useCallback(async () => {
     try {
-      const params = filter ? { status: filter } : {}
+      const params = { page, limit }
+      if (filter) params.status = filter
+      if (search) params.search = search
+      
       const result = await getUrls(params)
       setData(result)
+      setPagination(result.pagination)
       setError(null)
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
-  }, [filter])
+  }, [filter, search, page, limit])
 
   const { refresh } = usePolling(fetchData, 10000)
 
@@ -337,9 +346,22 @@ export default function URLs() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 sm:gap-4">
+        <SearchInput
+          value={search}
+          onChange={(value) => {
+            setSearch(value)
+            setPage(1) // Reset to first page on search
+          }}
+          placeholder="Search URLs..."
+          className="w-full sm:w-64"
+        />
+        
         <select
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={(e) => {
+            setFilter(e.target.value)
+            setPage(1) // Reset to first page on filter change
+          }}
           className="input w-full sm:w-auto sm:max-w-xs"
         >
           <option value="">All Status</option>
@@ -376,6 +398,8 @@ export default function URLs() {
         selectable={true}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
+        pagination={pagination}
+        onPageChange={setPage}
       />
 
       {/* Add URL Modal */}
