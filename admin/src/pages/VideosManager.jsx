@@ -15,6 +15,7 @@ import {
   downloadVideo as downloadVideoApi,
   reuploadVideo,
   bulkReuploadVideos,
+  resetStuckUploads,
   getStorageStatus,
   testStorageConnection,
   reconcileStorage,
@@ -42,6 +43,7 @@ export default function VideosManager() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [actionLoading, setActionLoading] = useState(null)
   const [syncingAll, setSyncingAll] = useState(false)
+  const [resettingStuck, setResettingStuck] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
   const [downloadResult, setDownloadResult] = useState(null)
   const [showDownloadModal, setShowDownloadModal] = useState(false)
@@ -195,6 +197,24 @@ export default function VideosManager() {
       setError(err.message)
     } finally {
       setSyncingAll(false)
+    }
+  }
+
+  const handleResetStuck = async () => {
+    setResettingStuck(true)
+    try {
+      const result = await resetStuckUploads(10)
+      setError(null)
+      if (result.reset > 0) {
+        alert(`Reset ${result.reset} stuck uploads to pending.`)
+      } else {
+        alert('No stuck uploads found (videos must be uploading for >10 minutes).')
+      }
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setResettingStuck(false)
     }
   }
 
@@ -480,13 +500,14 @@ export default function VideosManager() {
               Sync
             </button>
           )}
-          {(row.status === 'synced' || row.status === 'error') && storage?.configured && (
+          {(row.status === 'synced' || row.status === 'error' || row.status === 'uploading') && storage?.configured && (
             <button
               onClick={() => handleReupload(row.id)}
               disabled={actionLoading === `reupload-${row.id}`}
-              className="btn-secondary text-xs py-1 px-2"
+              className={`text-xs py-1 px-2 ${row.status === 'uploading' ? 'btn-ghost text-amber-400 hover:text-amber-300' : 'btn-secondary'}`}
+              title={row.status === 'uploading' ? 'Reset stuck upload and retry' : 'Re-upload video'}
             >
-              {actionLoading === `reupload-${row.id}` ? '...' : 'Re-upload'}
+              {actionLoading === `reupload-${row.id}` ? '...' : (row.status === 'uploading' ? 'Reset' : 'Re-upload')}
             </button>
           )}
           <button
@@ -521,6 +542,16 @@ export default function VideosManager() {
           <p className="text-surface-400 mt-1 text-sm sm:text-base">Manage extracted videos and S3 sync</p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3">
+          {activeTab === 'videos' && storage?.configured && data?.stats?.byStatus?.uploading > 0 && (
+            <button
+              onClick={handleResetStuck}
+              disabled={resettingStuck}
+              className="btn-ghost flex items-center gap-2 text-sm text-amber-400 hover:text-amber-300"
+              title="Reset videos stuck in uploading status (>10 min) back to pending"
+            >
+              {resettingStuck ? 'Resetting...' : `Reset Stuck (${data.stats.byStatus.uploading})`}
+            </button>
+          )}
           {activeTab === 'videos' && storage?.configured && data?.stats?.byStatus?.pending > 0 && (
             <button
               onClick={handleSyncAll}
