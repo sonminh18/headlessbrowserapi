@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Pagination from './Pagination'
 
 export default function DataTable({ 
   columns, 
@@ -7,7 +8,10 @@ export default function DataTable({
   emptyMessage = 'No data available',
   selectable = false,
   selectedIds = [],
-  onSelectionChange = () => {}
+  onSelectionChange = () => {},
+  // Pagination props
+  pagination = null,
+  onPageChange = () => {}
 }) {
   const [localSelected, setLocalSelected] = useState(new Set(selectedIds))
 
@@ -130,6 +134,19 @@ export default function DataTable({
           </tbody>
         </table>
       </div>
+      
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="border-t border-surface-800">
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.totalPages}
+            totalItems={pagination.total}
+            itemsPerPage={pagination.limit}
+            onPageChange={onPageChange}
+          />
+        </div>
+      )}
     </div>
   )
 }
