@@ -14,6 +14,7 @@ import {
   syncAllVideos,
   downloadVideo as downloadVideoApi,
   reuploadVideo,
+  bulkReuploadVideos,
   getStorageStatus,
   testStorageConnection,
   reconcileStorage,
@@ -31,8 +32,10 @@ export default function VideosManager() {
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState('createdAt')
+  const [sortOrder, setSortOrder] = useState('desc')
   const [page, setPage] = useState(1)
-  const [limit] = useState(20)
+  const [limit] = useState(10)
   const [pagination, setPagination] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [editVideo, setEditVideo] = useState(null)
@@ -48,6 +51,7 @@ export default function VideosManager() {
   const [selectedIds, setSelectedIds] = useState([])
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkReuploading, setBulkReuploading] = useState(false)
   
   // Storage sync state
   const [activeTab, setActiveTab] = useState('videos') // 'videos' or 'storage-sync'
@@ -65,7 +69,7 @@ export default function VideosManager() {
 
   const fetchData = useCallback(async () => {
     try {
-      const params = { page, limit }
+      const params = { page, limit, sortBy, sortOrder }
       if (filter) params.status = filter
       if (search) params.search = search
       
@@ -82,7 +86,7 @@ export default function VideosManager() {
     } finally {
       setLoading(false)
     }
-  }, [filter, search, page, limit])
+  }, [filter, search, sortBy, sortOrder, page, limit])
 
   const { refresh } = usePolling(fetchData, 10000)
 
@@ -222,6 +226,24 @@ export default function VideosManager() {
       setError(err.message)
     } finally {
       setBulkDeleting(false)
+    }
+  }
+
+  const handleBulkReupload = async () => {
+    if (selectedIds.length === 0) return
+    
+    setBulkReuploading(true)
+    try {
+      const result = await bulkReuploadVideos(selectedIds)
+      setSelectedIds([])
+      refresh()
+      if (result.failed > 0) {
+        setError(`Re-uploaded ${result.success}/${result.total} videos. ${result.failed} failed.`)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBulkReuploading(false)
     }
   }
 
@@ -388,7 +410,37 @@ export default function VideosManager() {
       ) : '-'
     },
     {
-      header: 'Created',
+      header: (
+        <button 
+          onClick={() => {
+            if (sortBy === 'createdAt') {
+              setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
+            } else {
+              setSortBy('createdAt')
+              setSortOrder('desc')
+            }
+            setPage(1)
+          }} 
+          className="flex items-center gap-1 hover:text-surface-200 transition-colors"
+        >
+          Created
+          {sortBy === 'createdAt' ? (
+            sortOrder === 'desc' ? (
+              <svg className="w-3 h-3 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            ) : (
+              <svg className="w-3 h-3 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            )
+          ) : (
+            <svg className="w-3 h-3 text-surface-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+            </svg>
+          )}
+        </button>
+      ),
       accessor: 'createdAt',
       render: (row) => (
         <span className="whitespace-nowrap text-xs sm:text-sm">
@@ -780,6 +832,15 @@ export default function VideosManager() {
             >
               Clear Selection
             </button>
+            {storage?.configured && (
+              <button
+                onClick={handleBulkReupload}
+                disabled={bulkReuploading}
+                className="btn-secondary text-xs"
+              >
+                {bulkReuploading ? 'Re-uploading...' : 'Re-upload Selected'}
+              </button>
+            )}
             <button
               onClick={() => setShowBulkDeleteConfirm(true)}
               className="btn-ghost text-xs text-red-400 hover:text-red-300"
