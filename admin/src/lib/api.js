@@ -65,6 +65,7 @@ export const syncAllVideos = () => request('/videos/sync-all', { method: 'POST' 
 export const downloadVideo = (id) => request(`/videos/${id}/download`, { method: 'POST' })
 export const reuploadVideo = (id) => request(`/videos/${id}/reupload`, { method: 'POST' })
 export const bulkReuploadVideos = (ids) => request('/videos/bulk-reupload', { method: 'POST', body: JSON.stringify({ ids }) })
+export const resetStuckUploads = (timeoutMinutes = 10) => request('/videos/reset-stuck', { method: 'POST', body: JSON.stringify({ timeoutMinutes }) })
 
 // Storage
 export const getStorageStatus = () => request('/storage/status')
