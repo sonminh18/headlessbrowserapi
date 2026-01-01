@@ -13,8 +13,11 @@ export default function URLs() {
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [hasVideoFilter, setHasVideoFilter] = useState(false)
+  const [sortBy, setSortBy] = useState('createdAt')
+  const [sortOrder, setSortOrder] = useState('desc')
   const [page, setPage] = useState(1)
-  const [limit] = useState(20)
+  const [limit] = useState(10)
   const [pagination, setPagination] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -40,9 +43,10 @@ export default function URLs() {
 
   const fetchData = useCallback(async () => {
     try {
-      const params = { page, limit }
+      const params = { page, limit, sortBy, sortOrder }
       if (filter) params.status = filter
       if (search) params.search = search
+      if (hasVideoFilter) params.hasVideo = true
       
       const result = await getUrls(params)
       setData(result)
@@ -53,7 +57,7 @@ export default function URLs() {
     } finally {
       setLoading(false)
     }
-  }, [filter, search, page, limit])
+  }, [filter, search, hasVideoFilter, sortBy, sortOrder, page, limit])
 
   const { refresh } = usePolling(fetchData, 10000)
 
@@ -179,6 +183,35 @@ export default function URLs() {
     return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`
   }
 
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
+    } else {
+      setSortBy(field)
+      setSortOrder('desc')
+    }
+    setPage(1)
+  }
+
+  const SortIcon = ({ field }) => {
+    if (sortBy !== field) {
+      return (
+        <svg className="w-3 h-3 text-surface-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      )
+    }
+    return sortOrder === 'desc' ? (
+      <svg className="w-3 h-3 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    ) : (
+      <svg className="w-3 h-3 text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      </svg>
+    )
+  }
+
   const columns = [
     {
       header: 'URL',
@@ -235,10 +268,41 @@ export default function URLs() {
       )
     },
     {
-      header: 'Duration',
+      header: (
+        <button 
+          onClick={() => handleSort('duration')} 
+          className="flex items-center gap-1 hover:text-surface-200 transition-colors"
+        >
+          Duration
+          <SortIcon field="duration" />
+        </button>
+      ),
       render: (row) => (
         <span className="whitespace-nowrap text-xs sm:text-sm">
           {formatDuration(row)}
+        </span>
+      )
+    },
+    {
+      header: (
+        <button 
+          onClick={() => handleSort('createdAt')} 
+          className="flex items-center gap-1 hover:text-surface-200 transition-colors"
+        >
+          Created
+          <SortIcon field="createdAt" />
+        </button>
+      ),
+      render: (row) => (
+        <span className="whitespace-nowrap text-xs sm:text-sm">
+          {new Date(row.createdAt).toLocaleString('vi-VN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          })}
         </span>
       )
     },
@@ -345,7 +409,7 @@ export default function URLs() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 sm:gap-4">
+      <div className="flex flex-wrap gap-3 sm:gap-4 items-center">
         <SearchInput
           value={search}
           onChange={(value) => {
@@ -371,6 +435,20 @@ export default function URLs() {
             </option>
           ))}
         </select>
+        
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={hasVideoFilter}
+            onChange={(e) => {
+              setHasVideoFilter(e.target.checked)
+              setPage(1)
+            }}
+            className="w-4 h-4 rounded border-surface-600 bg-surface-800 text-primary-500 
+                       focus:ring-primary-500 focus:ring-offset-0 focus:ring-2"
+          />
+          <span className="text-sm text-surface-300">Has Video</span>
+        </label>
         
         <button onClick={refresh} className="btn-secondary">
           Refresh

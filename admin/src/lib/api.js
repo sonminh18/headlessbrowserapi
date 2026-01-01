@@ -64,6 +64,7 @@ export const syncVideo = (id) => request(`/videos/${id}/sync`, { method: 'POST' 
 export const syncAllVideos = () => request('/videos/sync-all', { method: 'POST' })
 export const downloadVideo = (id) => request(`/videos/${id}/download`, { method: 'POST' })
 export const reuploadVideo = (id) => request(`/videos/${id}/reupload`, { method: 'POST' })
+export const bulkReuploadVideos = (ids) => request('/videos/bulk-reupload', { method: 'POST', body: JSON.stringify({ ids }) })
 
 // Storage
 export const getStorageStatus = () => request('/storage/status')
