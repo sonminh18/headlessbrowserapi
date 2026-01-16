@@ -79,7 +79,7 @@ function getHostname(url) {
  */
 function Pagination({ page, totalPages, total, onPageChange, label = 'items' }) {
   if (totalPages <= 1) return null
-  
+
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-surface-800/30 border-t border-surface-700/50">
       <span className="text-xs text-surface-500">
@@ -120,7 +120,7 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [selectedItems, setSelectedItems] = useState([])
-  
+
   // Pagination state
   const [pendingPage, setPendingPage] = useState(1)
   const [completedPage, setCompletedPage] = useState(1)
@@ -278,7 +278,7 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
     const pending = queueStatus?.pendingCount || 0
     const completed = queueStatus?.completed?.filter(c => c.state === 'completed').length || 0
     const failed = queueStatus?.completed?.filter(c => c.state === 'failed').length || 0
-    
+
     return {
       active: activeFromQueue + activeFromVideos,
       pending,
@@ -299,19 +299,19 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
       progress: videoProgress[v.id] || {},
       source: 'tracker'
     }))
-    
+
     const fromQueue = (queueStatus?.active || []).map(item => ({
       ...item,
       progress: videoProgress[item.videoId] || item,
       source: 'queue'
     }))
-    
+
     return [...fromVideos, ...fromQueue]
   }, [uploadingVideos, queueStatus, videoProgress])
 
   const toggleSelectItem = (videoId) => {
-    setSelectedItems(prev => 
-      prev.includes(videoId) 
+    setSelectedItems(prev =>
+      prev.includes(videoId)
         ? prev.filter(id => id !== videoId)
         : [...prev, videoId]
     )
@@ -325,7 +325,7 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
   return (
     <div className="space-y-6">
       {/* Header Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <div className="glass-card p-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-primary-500/20">
@@ -339,7 +339,7 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
             </div>
           </div>
         </div>
-        
+
         <div className="glass-card p-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-amber-500/20">
@@ -353,7 +353,7 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
             </div>
           </div>
         </div>
-        
+
         <div className="glass-card p-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-emerald-500/20">
@@ -367,7 +367,7 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
             </div>
           </div>
         </div>
-        
+
         <div className="glass-card p-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-red-500/20">
@@ -378,6 +378,22 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
             <div>
               <div className="text-2xl font-bold text-red-400">{stats.failed}</div>
               <div className="text-xs text-surface-500 uppercase tracking-wide">Failed</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-blue-500/20">
+              <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-blue-400">
+                {(queueStatus?.downloadQueue?.waiting || 0) + (queueStatus?.downloadQueue?.active || 0)}
+              </div>
+              <div className="text-xs text-surface-500 uppercase tracking-wide">Downloads</div>
             </div>
           </div>
         </div>
@@ -445,7 +461,7 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
               Uploading Now ({allActiveItems.length})
             </h3>
           </div>
-          
+
           <div className="grid gap-3">
             {allActiveItems.map(item => (
               <div key={item.videoId} className="glass-card p-4 hover:border-primary-500/30 transition-colors">
@@ -554,7 +570,7 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
               </button>
             </div>
           </div>
-          
+
           <div className="glass-card overflow-hidden">
             <table className="w-full">
               <thead>
@@ -670,7 +686,7 @@ export default function UploadQueueTab({ videoProgress = {}, onRefresh, uploadin
               Clear History
             </button>
           </div>
-          
+
           <div className="glass-card overflow-hidden">
             <table className="w-full">
               <thead>

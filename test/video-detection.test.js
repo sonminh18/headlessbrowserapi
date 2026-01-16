@@ -42,24 +42,24 @@ describe("Video URL Detection", function() {
                 }
                 return html;
             };
-            
+
             // Test case: Regular page with a video
             const html1 = "<html><body>Test content</body></html>";
             const videoUrls1 = [{ url: "http://example.com/video.mp4" }];
             const result1 = determineResponse(html1, videoUrls1, false);
             assert.strictEqual(result1, "http://example.com/video.mp4");
-            
+
             // Test case: Image request with videos
             const html2 = "base64-image-content";
             const videoUrls2 = [{ url: "http://example.com/video.mp4" }];
             const result2 = determineResponse(html2, videoUrls2, true);
             assert.strictEqual(result2, "base64-image-content");
-            
+
             // Test case: No videos found
             const html3 = "<html><body>No videos here</body></html>";
             const result3 = determineResponse(html3, [], false);
             assert.strictEqual(result3, "<html><body>No videos here</body></html>");
-            
+
             // Test case: Multiple videos - first one should be used
             const html4 = "<html><body>Multiple videos</body></html>";
             const videoUrls4 = [
@@ -75,9 +75,9 @@ describe("Video URL Detection", function() {
         it("should return OK status from health endpoint", async function() {
             const response = await request(app)
                 .get("/health");
-            
+
             assert.strictEqual(response.status, 200);
             assert.deepStrictEqual(response.body, { status: "ok" });
         });
     });
-}); 
+});

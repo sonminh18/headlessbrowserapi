@@ -2,7 +2,7 @@
  * API client for Admin Portal
  */
 
-const API_BASE = '/admin/api'
+const API_BASE = "/admin/api";
 
 /**
  * Make an API request
@@ -11,132 +11,131 @@ const API_BASE = '/admin/api'
  * @returns {Promise<any>}
  */
 async function request(endpoint, options = {}) {
-  const url = `${API_BASE}${endpoint}`
-  
-  const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers
-    },
-    ...options
-  }
-  
-  const response = await fetch(url, config)
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Request failed' }))
-    throw new Error(error.error || `HTTP ${response.status}`)
-  }
-  
-  return response.json()
+    const url = `${API_BASE}${endpoint}`;
+
+    const config = {
+        headers: {
+            "Content-Type": "application/json",
+            ...options.headers
+        },
+        ...options
+    };
+
+    const response = await fetch(url, config);
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: "Request failed" }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+    }
+
+    return response.json();
 }
 
 // Dashboard
-export const getDashboard = () => request('/dashboard')
+export const getDashboard = () => request("/dashboard");
 
 // Browsers
-export const getBrowsers = () => request('/browsers')
-export const terminateBrowser = (id) => request(`/browsers/${id}/terminate`, { method: 'POST' })
+export const getBrowsers = () => request("/browsers");
+export const terminateBrowser = (id) => request(`/browsers/${id}/terminate`, { method: "POST" });
 
 // URLs
 export const getUrls = (params = {}) => {
-  const query = new URLSearchParams(params).toString()
-  return request(`/urls${query ? `?${query}` : ''}`)
-}
-export const getUrlDetails = (id) => request(`/urls/${id}`)
-export const addUrl = (url) => request('/urls', { method: 'POST', body: JSON.stringify({ url }) })
-export const rescrapeUrl = (id) => request(`/urls/${id}/rescrape`, { method: 'POST' })
-export const cancelUrl = (id) => request(`/urls/${id}/cancel`, { method: 'POST' })
-export const deleteUrl = (id) => request(`/urls/${id}`, { method: 'DELETE' })
-export const bulkDeleteUrls = (ids) => request('/urls/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) })
-export const getUrlCachedResponse = (id) => request(`/urls/${id}/response`)
+    const query = new URLSearchParams(params).toString();
+    return request(`/urls${query ? `?${query}` : ""}`);
+};
+export const getUrlDetails = (id) => request(`/urls/${id}`);
+export const addUrl = (url) => request("/urls", { method: "POST", body: JSON.stringify({ url }) });
+export const rescrapeUrl = (id) => request(`/urls/${id}/rescrape`, { method: "POST" });
+export const cancelUrl = (id) => request(`/urls/${id}/cancel`, { method: "POST" });
+export const deleteUrl = (id) => request(`/urls/${id}`, { method: "DELETE" });
+export const bulkDeleteUrls = (ids) => request("/urls/bulk-delete", { method: "POST", body: JSON.stringify({ ids }) });
+export const getUrlCachedResponse = (id) => request(`/urls/${id}/response`);
 
 // Videos
 export const getVideos = (params = {}) => {
-  // Filter out null/undefined params
-  const filteredParams = Object.fromEntries(
-    Object.entries(params).filter(([_, v]) => v != null && v !== '')
-  )
-  const query = new URLSearchParams(filteredParams).toString()
-  return request(`/videos${query ? `?${query}` : ''}`)
-}
-export const addVideo = (data) => request('/videos', { method: 'POST', body: JSON.stringify(data) })
-export const updateVideo = (id, data) => request(`/videos/${id}`, { method: 'PUT', body: JSON.stringify(data) })
-export const deleteVideo = (id) => request(`/videos/${id}`, { method: 'DELETE' })
-export const bulkDeleteVideos = (ids, keepStorage = false) => request('/videos/bulk-delete', { method: 'POST', body: JSON.stringify({ ids, keepStorage }) })
-export const syncVideo = (id) => request(`/videos/${id}/sync`, { method: 'POST' })
-export const syncAllVideos = () => request('/videos/sync-all', { method: 'POST' })
-export const downloadVideo = (id) => request(`/videos/${id}/download`, { method: 'POST' })
-export const reuploadVideo = (id, options = {}) => request(`/videos/${id}/reupload`, { method: 'POST', body: JSON.stringify(options) })
-export const bulkReuploadVideos = (ids, options = {}) => request('/videos/bulk-reupload', { method: 'POST', body: JSON.stringify({ ids, ...options }) })
-export const resetStuckUploads = (timeoutMinutes = 10) => request('/videos/reset-stuck', { method: 'POST', body: JSON.stringify({ timeoutMinutes }) })
-export const bulkSyncVideos = (ids) => request('/videos/bulk-sync', { method: 'POST', body: JSON.stringify({ ids }) })
-export const retryFailedVideos = (options = {}) => request('/videos/retry-failed', { method: 'POST', body: JSON.stringify(options) })
+    // Filter out null/undefined params
+    const filteredParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v != null && v !== "")
+    );
+    const query = new URLSearchParams(filteredParams).toString();
+    return request(`/videos${query ? `?${query}` : ""}`);
+};
+export const addVideo = (data) => request("/videos", { method: "POST", body: JSON.stringify(data) });
+export const updateVideo = (id, data) => request(`/videos/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const deleteVideo = (id) => request(`/videos/${id}`, { method: "DELETE" });
+export const bulkDeleteVideos = (ids, keepStorage = false) => request("/videos/bulk-delete", { method: "POST", body: JSON.stringify({ ids, keepStorage }) });
+export const syncVideo = (id) => request(`/videos/${id}/sync`, { method: "POST" });
+export const syncAllVideos = () => request("/videos/sync-all", { method: "POST" });
+export const downloadVideo = (id) => request(`/videos/${id}/download`, { method: "POST" });
+export const reuploadVideo = (id, options = {}) => request(`/videos/${id}/reupload`, { method: "POST", body: JSON.stringify(options) });
+export const bulkReuploadVideos = (ids, options = {}) => request("/videos/bulk-reupload", { method: "POST", body: JSON.stringify({ ids, ...options }) });
+export const resetStuckUploads = (timeoutMinutes = 10) => request("/videos/reset-stuck", { method: "POST", body: JSON.stringify({ timeoutMinutes }) });
+export const bulkSyncVideos = (ids) => request("/videos/bulk-sync", { method: "POST", body: JSON.stringify({ ids }) });
+export const retryFailedVideos = (options = {}) => request("/videos/retry-failed", { method: "POST", body: JSON.stringify(options) });
 
 // Export videos to CSV/JSON
-export const exportVideos = async (format = 'csv', params = {}) => {
-  const filteredParams = Object.fromEntries(
-    Object.entries(params).filter(([_, v]) => v != null && v !== '')
-  )
-  const query = new URLSearchParams({ ...filteredParams, format }).toString()
-  return request(`/videos/export?${query}`)
-}
+export const exportVideos = async (format = "csv", params = {}) => {
+    const filteredParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v != null && v !== "")
+    );
+    const query = new URLSearchParams({ ...filteredParams, format }).toString();
+    return request(`/videos/export?${query}`);
+};
 
 // Upload Queue
 export const getUploadQueueStatus = (params = {}) => {
-  const queryParams = new URLSearchParams()
-  if (params.pendingPage) queryParams.set('pendingPage', params.pendingPage)
-  if (params.pendingLimit) queryParams.set('pendingLimit', params.pendingLimit)
-  if (params.completedPage) queryParams.set('completedPage', params.completedPage)
-  if (params.completedLimit) queryParams.set('completedLimit', params.completedLimit)
-  const query = queryParams.toString()
-  return request(`/upload-queue/status${query ? `?${query}` : ''}`)
-}
-export const addToUploadQueue = (ids, priority = 0) => request('/upload-queue/add', { method: 'POST', body: JSON.stringify({ ids, priority }) })
-export const pauseUpload = (id) => request(`/upload-queue/${id}/pause`, { method: 'POST' })
-export const resumeUpload = (id) => request(`/upload-queue/${id}/resume`, { method: 'POST' })
-export const cancelUpload = (id) => request(`/upload-queue/${id}/cancel`, { method: 'POST' })
-export const setUploadPriority = (id, priority) => request(`/upload-queue/${id}/priority`, { method: 'POST', body: JSON.stringify({ priority }) })
-export const pauseAllUploads = () => request('/upload-queue/pause-all', { method: 'POST' })
-export const resumeAllUploads = () => request('/upload-queue/resume-all', { method: 'POST' })
-export const clearUploadHistory = () => request('/upload-queue/clear', { method: 'POST' })
-export const resetAllUploads = () => request('/upload-queue/reset-all', { method: 'POST' })
+    const queryParams = new URLSearchParams();
+    if (params.pendingPage) queryParams.set("pendingPage", params.pendingPage);
+    if (params.pendingLimit) queryParams.set("pendingLimit", params.pendingLimit);
+    if (params.completedPage) queryParams.set("completedPage", params.completedPage);
+    if (params.completedLimit) queryParams.set("completedLimit", params.completedLimit);
+    const query = queryParams.toString();
+    return request(`/upload-queue/status${query ? `?${query}` : ""}`);
+};
+export const addToUploadQueue = (ids, priority = 0) => request("/upload-queue/add", { method: "POST", body: JSON.stringify({ ids, priority }) });
+export const pauseUpload = (id) => request(`/upload-queue/${id}/pause`, { method: "POST" });
+export const resumeUpload = (id) => request(`/upload-queue/${id}/resume`, { method: "POST" });
+export const cancelUpload = (id) => request(`/upload-queue/${id}/cancel`, { method: "POST" });
+export const setUploadPriority = (id, priority) => request(`/upload-queue/${id}/priority`, { method: "POST", body: JSON.stringify({ priority }) });
+export const pauseAllUploads = () => request("/upload-queue/pause-all", { method: "POST" });
+export const resumeAllUploads = () => request("/upload-queue/resume-all", { method: "POST" });
+export const clearUploadHistory = () => request("/upload-queue/clear", { method: "POST" });
+export const resetAllUploads = () => request("/upload-queue/reset-all", { method: "POST" });
 
 // Storage
-export const getStorageStatus = () => request('/storage/status')
-export const testStorageConnection = () => request('/storage/test', { method: 'POST' })
+export const getStorageStatus = () => request("/storage/status");
+export const testStorageConnection = () => request("/storage/test", { method: "POST" });
 
 // Storage Sync
-export const getStorageSyncStatus = () => request('/storage/sync/status')
-export const scanStorage = () => request('/storage/scan', { method: 'POST' })
-export const reconcileStorage = (forceRefresh = false) => request(`/storage/reconcile${forceRefresh ? '?forceRefresh=true' : ''}`)
-export const getOrphanFiles = () => request('/storage/orphans')
-export const importOrphan = (key) => request('/storage/orphans/import', { 
-  method: 'POST', 
-  body: JSON.stringify({ key }) 
-})
-export const deleteOrphan = (key) => request('/storage/orphans', { 
-  method: 'DELETE', 
-  body: JSON.stringify({ key }) 
-})
-export const bulkImportOrphans = (keys) => request('/storage/orphans/bulk-import', { 
-  method: 'POST', 
-  body: JSON.stringify({ keys }) 
-})
-export const bulkDeleteOrphans = (keys) => request('/storage/orphans/bulk-delete', { 
-  method: 'POST', 
-  body: JSON.stringify({ keys }) 
-})
-export const fixMissingInS3 = (ids) => request('/storage/fix-missing', { 
-  method: 'POST', 
-  body: JSON.stringify({ ids }) 
-})
-export const clearStorageCache = () => request('/storage/clear-cache', { method: 'POST' })
+export const getStorageSyncStatus = () => request("/storage/sync/status");
+export const scanStorage = () => request("/storage/scan", { method: "POST" });
+export const reconcileStorage = (forceRefresh = false) => request(`/storage/reconcile${forceRefresh ? "?forceRefresh=true" : ""}`);
+export const getOrphanFiles = () => request("/storage/orphans");
+export const importOrphan = (key) => request("/storage/orphans/import", {
+    method: "POST",
+    body: JSON.stringify({ key })
+});
+export const deleteOrphan = (key) => request("/storage/orphans", {
+    method: "DELETE",
+    body: JSON.stringify({ key })
+});
+export const bulkImportOrphans = (keys) => request("/storage/orphans/bulk-import", {
+    method: "POST",
+    body: JSON.stringify({ keys })
+});
+export const bulkDeleteOrphans = (keys) => request("/storage/orphans/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ keys })
+});
+export const fixMissingInS3 = (ids) => request("/storage/fix-missing", {
+    method: "POST",
+    body: JSON.stringify({ ids })
+});
+export const clearStorageCache = () => request("/storage/clear-cache", { method: "POST" });
 
 // Cache
-export const getCacheStats = () => request('/cache/stats')
-export const clearCache = (pattern) => request('/cache/clear', { 
-  method: 'POST', 
-  body: JSON.stringify({ pattern }) 
-})
-
+export const getCacheStats = () => request("/cache/stats");
+export const clearCache = (pattern) => request("/cache/clear", {
+    method: "POST",
+    body: JSON.stringify({ pattern })
+});

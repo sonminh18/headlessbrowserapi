@@ -55,7 +55,7 @@ describe("API Endpoints", function() {
                 assert.strictEqual(response.status, 400);
                 assert.ok(response.body.error.includes("API key"));
                 assert.ok(response.body.html.includes("API key"));
-                assert.ok(typeof response.body.apicalls === 'number');
+                assert.ok(typeof response.body.apicalls === "number");
                 assert.ok(response.body.url);
             });
 
@@ -93,7 +93,7 @@ describe("API Endpoints", function() {
                 assert.strictEqual(response.status, 400);
                 assert.ok(response.body.error.includes("Unsupported engine"));
             });
-            
+
             it("should reject phantom engine", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/phantom")
@@ -105,7 +105,7 @@ describe("API Endpoints", function() {
                 assert.strictEqual(response.status, 400);
                 assert.ok(response.body.error.includes("Unsupported engine"));
             });
-            
+
             it("should validate cleanup parameter", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
@@ -118,7 +118,7 @@ describe("API Endpoints", function() {
                 assert.strictEqual(response.status, 400);
                 assert.ok(response.body.error.includes("Invalid cleanup value"));
             });
-            
+
             it("should validate delay parameter", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
@@ -131,20 +131,20 @@ describe("API Endpoints", function() {
                 assert.strictEqual(response.status, 400);
                 assert.ok(response.body.error.includes("Delay must be a non-negative number"));
             });
-            
+
             it("should validate eval parameter", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
                     .query({
                         apikey: "test",
                         url: "http://example.com",
-                        eval: "%"  // Invalid URL encoding
+                        eval: "%" // Invalid URL encoding
                     });
 
                 assert.strictEqual(response.status, 400);
                 assert.ok(response.body.error.includes("Invalid eval parameter"));
             });
-            
+
             it("should validate basic_auth format", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
@@ -172,7 +172,7 @@ describe("API Endpoints", function() {
                 assert.ok(response.body.error.includes("Invalid custom_cookies format"));
             });
         });
-        
+
         context("Puppeteer Engine Tests", function() {
             it("should scrape content with default options and return correct format", async function() {
                 const response = await request(app)
@@ -183,10 +183,10 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                
+
                 // Verify response structure
                 assert.ok(response.body.html, "Response should have html field");
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
                 assert.strictEqual(response.body.url, "http://example.com", "Response should include the requested URL");
                 assert.ok(response.body.html.includes("Example Domain"), "HTML should contain scraped content");
             });
@@ -207,7 +207,7 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
                 assert.strictEqual(response.body.url, "http://example.com");
             });
 
@@ -222,7 +222,7 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
             });
 
             it("should handle custom timeout", async function() {
@@ -236,7 +236,7 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
             });
 
             it("should handle custom cookies", async function() {
@@ -251,9 +251,9 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
             });
-            
+
             it("should handle string format cookies", async function() {
                 // Test with cookie string format (name=value;name2=value2)
                 const cookieString = "sessionId=abc123;user=testuser";
@@ -267,13 +267,13 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
             });
 
             it("should handle proxy settings", async function() {
                 // Skip this test because we can't actually connect to a proxy in the test environment
                 // Instead, we'll verify that the endpoint responds without error when proxy settings are provided
-                
+
                 // We need to intercept the browser.launch call to prevent actual proxy connection
                 // This is just a test of parameter handling, not actual proxy functionality
                 const response = await request(app)
@@ -288,7 +288,7 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
             });
 
             it("should handle basic authentication", async function() {
@@ -302,9 +302,9 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
             });
-            
+
             it("should handle cleanup parameter", async function() {
                 // Test with cleanup enabled (default)
                 const responseCleanupEnabled = await request(app)
@@ -317,8 +317,8 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(responseCleanupEnabled.status, 200);
                 assert.ok(responseCleanupEnabled.body.html.includes("Example Domain"));
-                assert.ok(typeof responseCleanupEnabled.body.apicalls === 'number', "apicalls should be a number");
-                
+                assert.ok(typeof responseCleanupEnabled.body.apicalls === "number", "apicalls should be a number");
+
                 // Test with cleanup disabled
                 const responseCleanupDisabled = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
@@ -330,9 +330,9 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(responseCleanupDisabled.status, 200);
                 assert.ok(responseCleanupDisabled.body.html.includes("Example Domain"));
-                assert.ok(typeof responseCleanupDisabled.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof responseCleanupDisabled.body.apicalls === "number", "apicalls should be a number");
             });
-            
+
             it("should handle delay parameter", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
@@ -344,9 +344,9 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
             });
-            
+
             it("should handle localStorage parameter", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
@@ -358,9 +358,9 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
             });
-            
+
             it("should handle custom JavaScript evaluation", async function() {
                 const jsCode = "document.title = 'Modified Title'";
                 const response = await request(app)
@@ -373,10 +373,10 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
                 // We can't reliably test the actual JS execution in this mocked environment
             });
-            
+
             it("should handle alternative basic authentication", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
@@ -388,9 +388,9 @@ describe("API Endpoints", function() {
 
                 assert.strictEqual(response.status, 200);
                 assert.ok(response.body.html.includes("Example Domain"));
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
             });
-            
+
             it("should handle error responses with the correct format", async function() {
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
@@ -402,14 +402,14 @@ describe("API Endpoints", function() {
                 assert.strictEqual(response.status, 500);
                 assert.ok(response.body.html, "Response should have html field");
                 assert.ok(response.body.error, "Response should have error field");
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
                 assert.strictEqual(response.body.url, "http://notfound.example.com");
             });
-            
+
             it("should detect and handle image URLs and return base64 data", async function() {
                 // Use a real image URL from Wikipedia
                 const imageUrl = "https://upload.wikimedia.org/wikipedia/en/a/a9/Example.jpg";
-                    
+
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
                     .query({
@@ -418,34 +418,34 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                
+
                 // Check response structure
                 assert.ok(response.body.html, "Response should have html field");
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
-                
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
+
                 // Check that the html field contains base64 encoded data
                 // Base64 should only contain a-z, A-Z, 0-9, +, /, and = characters
                 const isBase64 = /^[A-Za-z0-9+/=]+$/.test(response.body.html);
                 assert.ok(isBase64, "HTML field should contain base64 encoded data without data URI prefix");
             });
-            
+
             it("should handle different image formats (PNG) and return base64 data", async function() {
                 // Mock a PNG image response
                 const pngUrl = "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png";
-                
+
                 // Create a small valid PNG buffer for testing
                 const pngHeader = Buffer.from([
                     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
                     0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01
                 ]);
-                
+
                 // Mock the Wikipedia URL
                 nock("https://upload.wikimedia.org")
                     .get("/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png")
-                    .reply(200, pngHeader, { 
-                        'Content-Type': 'image/png'
+                    .reply(200, pngHeader, {
+                        "Content-Type": "image/png"
                     });
-                    
+
                 const response = await request(app)
                     .get("/apis/scrape/v1/puppeteer")
                     .query({
@@ -455,11 +455,11 @@ describe("API Endpoints", function() {
                     });
 
                 assert.strictEqual(response.status, 200);
-                
+
                 // Check response structure
                 assert.ok(response.body.html, "Response should have html field");
-                assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
-                
+                assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
+
                 // Check that the html field contains base64 encoded data
                 const isBase64 = /^[A-Za-z0-9+/=]+$/.test(response.body.html);
                 assert.ok(isBase64, "HTML field should contain base64 encoded data");
@@ -547,7 +547,7 @@ describe("API Endpoints", function() {
             assert.ok(response.body.name);
             assert.ok(response.body.version);
             assert.ok(response.body.node);
-            
+
             // Verify that puppeteer is the only available engine
             assert.ok(response.body.engines.puppeteer);
         });
@@ -559,7 +559,7 @@ describe("API Endpoints", function() {
             assert.strictEqual(response.status, 404);
             assert.ok(response.body.html, "Response should have html field");
             assert.ok(response.body.error, "Response should have error field");
-            assert.ok(typeof response.body.apicalls === 'number', "apicalls should be a number");
+            assert.ok(typeof response.body.apicalls === "number", "apicalls should be a number");
             assert.strictEqual(response.body.url, "/unknown");
         });
     });
