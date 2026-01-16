@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from "react";
 
 /**
  * Custom hook for debouncing a value
@@ -7,19 +7,19 @@ import { useState, useEffect, useRef, useCallback } from 'react'
  * @returns {any} Debounced value
  */
 export function useDebounce(value, delay = 300) {
-  const [debouncedValue, setDebouncedValue] = useState(value)
+    const [debouncedValue, setDebouncedValue] = useState(value);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedValue(value)
-    }, delay)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
 
-    return () => {
-      clearTimeout(timer)
-    }
-  }, [value, delay])
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [value, delay]);
 
-  return debouncedValue
+    return debouncedValue;
 }
 
 /**
@@ -30,34 +30,34 @@ export function useDebounce(value, delay = 300) {
  * @returns {Function} Debounced callback
  */
 export function useDebouncedCallback(callback, delay = 300, deps = []) {
-  const timeoutRef = useRef(null)
-  const callbackRef = useRef(callback)
+    const timeoutRef = useRef(null);
+    const callbackRef = useRef(callback);
 
-  // Keep callback reference up to date
-  useEffect(() => {
-    callbackRef.current = callback
-  }, [callback])
+    // Keep callback reference up to date
+    useEffect(() => {
+        callbackRef.current = callback;
+    }, [callback]);
 
-  const debouncedCallback = useCallback((...args) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-    }
+    const debouncedCallback = useCallback((...args) => {
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+        }
 
-    timeoutRef.current = setTimeout(() => {
-      callbackRef.current(...args)
-    }, delay)
-  }, [delay, ...deps])
+        timeoutRef.current = setTimeout(() => {
+            callbackRef.current(...args);
+        }, delay);
+    }, [delay, ...deps]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-    }
-  }, [])
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
 
-  return debouncedCallback
+    return debouncedCallback;
 }
 
 /**
@@ -65,51 +65,50 @@ export function useDebouncedCallback(callback, delay = 300, deps = []) {
  * @returns {object} { createRequest, cancelAll }
  */
 export function useRequestDeduplication() {
-  const controllersRef = useRef(new Map())
+    const controllersRef = useRef(new Map());
 
-  const createRequest = useCallback((key, fetchFn) => {
+    const createRequest = useCallback((key, fetchFn) => {
     // Cancel previous request with the same key
-    if (controllersRef.current.has(key)) {
-      controllersRef.current.get(key).abort()
-    }
-
-    // Create new controller
-    const controller = new AbortController()
-    controllersRef.current.set(key, controller)
-
-    // Return promise that handles abort
-    return fetchFn(controller.signal)
-      .finally(() => {
-        // Clean up controller after request completes
-        if (controllersRef.current.get(key) === controller) {
-          controllersRef.current.delete(key)
+        if (controllersRef.current.has(key)) {
+            controllersRef.current.get(key).abort();
         }
-      })
-  }, [])
 
-  const cancelAll = useCallback(() => {
-    controllersRef.current.forEach(controller => {
-      controller.abort()
-    })
-    controllersRef.current.clear()
-  }, [])
+        // Create new controller
+        const controller = new AbortController();
+        controllersRef.current.set(key, controller);
 
-  const cancel = useCallback((key) => {
-    if (controllersRef.current.has(key)) {
-      controllersRef.current.get(key).abort()
-      controllersRef.current.delete(key)
-    }
-  }, [])
+        // Return promise that handles abort
+        return fetchFn(controller.signal)
+            .finally(() => {
+                // Clean up controller after request completes
+                if (controllersRef.current.get(key) === controller) {
+                    controllersRef.current.delete(key);
+                }
+            });
+    }, []);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cancelAll()
-    }
-  }, [cancelAll])
+    const cancelAll = useCallback(() => {
+        controllersRef.current.forEach(controller => {
+            controller.abort();
+        });
+        controllersRef.current.clear();
+    }, []);
 
-  return { createRequest, cancel, cancelAll }
+    const cancel = useCallback((key) => {
+        if (controllersRef.current.has(key)) {
+            controllersRef.current.get(key).abort();
+            controllersRef.current.delete(key);
+        }
+    }, []);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            cancelAll();
+        };
+    }, [cancelAll]);
+
+    return { createRequest, cancel, cancelAll };
 }
 
-export default useDebounce
-
+export default useDebounce;

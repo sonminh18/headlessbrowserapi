@@ -14,6 +14,7 @@ const { createAdminRouter } = require("./lib/routes/admin");
 const { videoTracker, selectBestVideo } = require("./lib/util/video-tracker");
 const { urlTracker, URL_STATUS } = require("./lib/util/url-tracker");
 const { logEmitter } = require("./lib/util/log-emitter");
+const { videoDownloadQueue } = require("./lib/util/video-download-queue");
 
 // Set up chrome-headless-shell executable path if not already set
 try {
@@ -72,67 +73,67 @@ const validateScrapeRequest = (req, res, next) => {
     try {
         // Extract and validate required parameters
         const { apikey, url } = req.query;
-        
+
         // Validate required parameters
         if (!apikey) {
-            return res.status(400).json({ 
-                html: "API key is required", 
+            return res.status(400).json({
+                html: "API key is required",
                 apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                 url: req.originalUrl || req.url,
-                error: "API key is required" 
+                error: "API key is required"
             });
         }
         if (!url) {
-            return res.status(400).json({ 
-                html: "URL is required", 
+            return res.status(400).json({
+                html: "URL is required",
                 apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                 url: req.originalUrl || req.url,
-                error: "URL is required" 
+                error: "URL is required"
             });
         }
-        
+
         // Validate URL format
         try {
             new URL(url);
         } catch (error) {
-            return res.status(400).json({ 
-                html: "Invalid URL format", 
+            return res.status(400).json({
+                html: "Invalid URL format",
                 apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                 url: req.originalUrl || req.url,
-                error: "Invalid URL format" 
+                error: "Invalid URL format"
             });
         }
-        
+
         // Set the API key in the request for verification
         req.query.key = apikey;
-        
+
         try {
             verifyKey(req);
         } catch (error) {
-            return res.status(400).json({ 
-                html: error.message, 
+            return res.status(400).json({
+                html: error.message,
                 apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                 url: req.originalUrl || req.url,
-                error: error.message 
+                error: error.message
             });
         }
-        
+
         // Validate timeout (must be a number)
         if (req.query.timeout && req.query.timeout !== 'default') {
             const timeout = parseInt(req.query.timeout, 10);
             if (isNaN(timeout) || timeout <= 0) {
-                return res.status(400).json({ 
-                    html: "Timeout must be a positive number", 
+                return res.status(400).json({
+                    html: "Timeout must be a positive number",
                     apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                     url: req.originalUrl || req.url,
-                    error: "Timeout must be a positive number" 
+                    error: "Timeout must be a positive number"
                 });
             }
-            
+
             // Log the custom timeout being used
             util.Logging.info(`Using custom timeout from request: ${timeout}ms`);
         }
-        
+
         // Validate custom cookies format if provided
         if (req.query.custom_cookies && req.query.custom_cookies !== 'default') {
             try {
@@ -143,8 +144,8 @@ const validateScrapeRequest = (req, res, next) => {
                 // Cookie strings should be in format: name=value;name2=value2
                 if (!req.query.custom_cookies.includes('=')) {
                     const errorMsg = "Invalid custom_cookies format. Must be URL-encoded JSON or a string in format 'name=value;name2=value2'";
-                    return res.status(400).json({ 
-                        html: errorMsg, 
+                    return res.status(400).json({
+                        html: errorMsg,
                         apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                         url: req.originalUrl || req.url,
                         error: errorMsg
@@ -152,125 +153,125 @@ const validateScrapeRequest = (req, res, next) => {
                 }
             }
         }
-        
+
         // Validate proxy_url if provided
         if (req.query.proxy_url && req.query.proxy_url !== 'default') {
             try {
                 new URL(req.query.proxy_url);
             } catch (error) {
-                return res.status(400).json({ 
-                    html: "Invalid proxy_url format", 
+                return res.status(400).json({
+                    html: "Invalid proxy_url format",
                     apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                     url: req.originalUrl || req.url,
-                    error: "Invalid proxy_url format" 
+                    error: "Invalid proxy_url format"
                 });
             }
         }
-        
+
         // Validate user_pass format if provided (should be username:password)
         if (req.query.user_pass && req.query.user_pass !== 'default' && !req.query.user_pass.includes(':')) {
-            return res.status(400).json({ 
-                html: "Invalid user_pass format. Must be 'username:password'", 
+            return res.status(400).json({
+                html: "Invalid user_pass format. Must be 'username:password'",
                 apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                 url: req.originalUrl || req.url,
-                error: "Invalid user_pass format. Must be 'username:password'" 
+                error: "Invalid user_pass format. Must be 'username:password'"
             });
         }
-        
+
         // Validate proxy_auth format if provided (should be username:password)
         if (req.query.proxy_auth && req.query.proxy_auth !== 'default' && !req.query.proxy_auth.includes(':')) {
-            return res.status(400).json({ 
-                html: "Invalid proxy_auth format. Must be 'username:password'", 
+            return res.status(400).json({
+                html: "Invalid proxy_auth format. Must be 'username:password'",
                 apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                 url: req.originalUrl || req.url,
-                error: "Invalid proxy_auth format. Must be 'username:password'" 
+                error: "Invalid proxy_auth format. Must be 'username:password'"
             });
         }
-        
+
         // Validate cleanup parameter if provided
         if (req.query.cleanup && req.query.cleanup !== 'true' && req.query.cleanup !== 'false') {
-            return res.status(400).json({ 
-                html: "Invalid cleanup value. Must be 'true' or 'false'", 
+            return res.status(400).json({
+                html: "Invalid cleanup value. Must be 'true' or 'false'",
                 apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                 url: req.originalUrl || req.url,
-                error: "Invalid cleanup value. Must be 'true' or 'false'" 
+                error: "Invalid cleanup value. Must be 'true' or 'false'"
             });
         }
-        
+
         // Validate upload parameter if provided
         if (req.query.upload && req.query.upload !== 'true' && req.query.upload !== 'false') {
-            return res.status(400).json({ 
-                html: "Invalid upload value. Must be 'true' or 'false'", 
+            return res.status(400).json({
+                html: "Invalid upload value. Must be 'true' or 'false'",
                 apicalls: lib.conf.API_CALLS_LIMIT,
                 url: req.originalUrl || req.url,
-                error: "Invalid upload value. Must be 'true' or 'false'" 
+                error: "Invalid upload value. Must be 'true' or 'false'"
             });
         }
-        
+
         // Check S3 configuration if upload=true
         if (req.query.upload === 'true' && !s3Storage.isConfigured()) {
-            return res.status(400).json({ 
-                html: "S3 storage is not configured. Set S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY environment variables.", 
+            return res.status(400).json({
+                html: "S3 storage is not configured. Set S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY environment variables.",
                 apicalls: lib.conf.API_CALLS_LIMIT,
                 url: req.originalUrl || req.url,
-                error: "S3 storage is not configured" 
+                error: "S3 storage is not configured"
             });
         }
-        
+
         // Validate delay parameter (must be a number)
         if (req.query.delay && req.query.delay !== 'default') {
             const delay = parseInt(req.query.delay, 10);
             if (isNaN(delay) || delay < 0) {
-                return res.status(400).json({ 
-                    html: "Delay must be a non-negative number", 
+                return res.status(400).json({
+                    html: "Delay must be a non-negative number",
                     apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                     url: req.originalUrl || req.url,
-                    error: "Delay must be a non-negative number" 
+                    error: "Delay must be a non-negative number"
                 });
             }
         }
-        
+
         // Validate basic_auth format if provided (should be username:password)
         if (req.query.basic_auth && req.query.basic_auth !== 'default' && !req.query.basic_auth.includes(':')) {
-            return res.status(400).json({ 
-                html: "Invalid basic_auth format. Must be 'username:password'", 
+            return res.status(400).json({
+                html: "Invalid basic_auth format. Must be 'username:password'",
                 apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                 url: req.originalUrl || req.url,
-                error: "Invalid basic_auth format. Must be 'username:password'" 
+                error: "Invalid basic_auth format. Must be 'username:password'"
             });
         }
-        
+
         // Validate eval parameter if provided (must be URL-encoded)
         if (req.query.eval && req.query.eval !== 'default') {
             try {
                 decodeURIComponent(req.query.eval);
             } catch (error) {
-                return res.status(400).json({ 
-                    html: "Invalid eval parameter. Must be URL-encoded JavaScript", 
+                return res.status(400).json({
+                    html: "Invalid eval parameter. Must be URL-encoded JavaScript",
                     apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                     url: req.originalUrl || req.url,
-                    error: "Invalid eval parameter. Must be URL-encoded JavaScript" 
+                    error: "Invalid eval parameter. Must be URL-encoded JavaScript"
                 });
             }
         }
-        
+
         // Get the appropriate engine
         const { engine } = req.params;
-        
+
         // Only support puppeteer engine now
         if (engine !== 'puppeteer') {
             const errorMsg = `Unsupported engine: ${engine}. Only puppeteer engine is supported`;
-            return res.status(400).json({ 
-                html: errorMsg, 
+            return res.status(400).json({
+                html: errorMsg,
                 apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
                 url: req.originalUrl || req.url,
                 error: errorMsg
             });
         }
-        
+
         const engineModule = lib.ENGINES.puppeteer;
         req.engineModule = engineModule;
-        
+
         next();
     } catch (error) {
         next(error);
@@ -284,18 +285,18 @@ const formatVideoUrls = (videoUrls) => {
             // Validate URL is a video by extension and not an image
             const url = video.url || '';
             const lowercaseUrl = url.toLowerCase();
-            
+
             // Skip URLs with image extensions
             if (lowercaseUrl.match(/\.(jpe?g|png|gif|bmp|webp)(\?.*)?$/i)) {
                 return false;
             }
-            
+
             // Accept only video and streaming URLs
             const hasVideoExtension = lowercaseUrl.match(/\.(mp4|webm|ogg|mov|avi|wmv|flv|mkv|m4v|mpeg|mpg|m3u8|mpd)(\?.*)?$/i);
-            const hasVideoMimeType = (video.mimeType || '').startsWith('video/') || 
-                                   (video.mimeType || '').includes('mpegURL') ||
-                                   (video.mimeType || '').includes('dash+xml');
-                                     
+            const hasVideoMimeType = (video.mimeType || '').startsWith('video/') ||
+                (video.mimeType || '').includes('mpegURL') ||
+                (video.mimeType || '').includes('dash+xml');
+
             return hasVideoExtension || hasVideoMimeType;
         })
         .map(video => {
@@ -305,13 +306,13 @@ const formatVideoUrls = (videoUrls) => {
                 originalUrl: video.url, // Always keep original URL for cache/tracking
                 mimeType: video.mimeType || ''
             };
-            
+
             // Add isHLS flag for HLS videos
-            if (video.url.toLowerCase().includes('.m3u8') || 
+            if (video.url.toLowerCase().includes('.m3u8') ||
                 (video.mimeType && (video.mimeType.includes('mpegURL') || video.mimeType.includes('x-mpegURL')))) {
                 videoInfo.isHLS = true;
             }
-            
+
             return videoInfo;
         });
 };
@@ -336,43 +337,111 @@ const generateVideoUrlsHtml = (videoUrls) => {
 // This ensures crawlers like Crawlomatic can properly parse the content
 const insertVideoUrlsIntoHtml = (html, videoUrls) => {
     if (!videoUrls || videoUrls.length === 0) return html;
-    
+
     const videoBlock = generateVideoUrlsHtml(videoUrls);
     if (!videoBlock) return html;
-    
+
     // Try to insert before </body> (case-insensitive)
     const bodyCloseRegex = /<\/body>/i;
     if (bodyCloseRegex.test(html)) {
         return html.replace(bodyCloseRegex, `${videoBlock}</body>`);
     }
-    
+
     // Try to insert before </html> if no </body> found
     const htmlCloseRegex = /<\/html>/i;
     if (htmlCloseRegex.test(html)) {
         return html.replace(htmlCloseRegex, `${videoBlock}</html>`);
     }
-    
+
     // Fallback: append at the end if no closing tags found
     return html + videoBlock;
+};
+
+// Prioritize video sources by format and quality
+// Returns sorted array: MP4 first, then WebM, HLS, DASH
+const prioritizeVideoSources = (videos) => {
+    if (!videos || videos.length === 0) return [];
+
+    return videos.map(v => ({
+        url: v.originalUrl || v.url,
+        mimeType: v.mimeType || 'video/mp4',
+        isHLS: v.isHLS || false,
+        priority: calculatePriority(v),
+        score: calculateQualityScore(v)
+    }))
+        .sort((a, b) => {
+            // First sort by priority (format type)
+            if (a.priority !== b.priority) return b.priority - a.priority;
+            // Then by quality score
+            return b.score - a.score;
+        });
+};
+
+// Calculate priority based on video format
+const calculatePriority = (video) => {
+    const url = (video.url || '').toLowerCase();
+
+    // MP4 = highest priority (easiest to download, no conversion)
+    if (url.includes('.mp4')) return 100;
+
+    // WebM = good priority (direct video format)
+    if (url.includes('.webm')) return 80;
+
+    // HLS = medium priority (requires conversion)
+    if (video.isHLS || url.includes('.m3u8')) return 60;
+
+    // DASH = lower priority (requires conversion)
+    if (url.includes('.mpd')) return 40;
+
+    // Other video formats
+    if (url.includes('.mov') || url.includes('.avi')) return 70;
+
+    // Default
+    return 50;
+};
+
+// Calculate quality score based on URL indicators
+const calculateQualityScore = (video) => {
+    const url = (video.url || '').toLowerCase();
+    let score = 0;
+
+    // Quality indicators
+    if (url.includes('4k') || url.includes('2160p') || url.includes('uhd')) score += 100;
+    else if (url.includes('1080p') || url.includes('fullhd') || url.includes('fhd')) score += 90;
+    else if (url.includes('720p') || url.includes('hd')) score += 80;
+    else if (url.includes('480p') || url.includes('sd')) score += 60;
+    else if (url.includes('360p')) score += 40;
+    else if (url.includes('240p')) score += 20;
+
+    // Prefer longer, more descriptive filenames (likely main content)
+    const filename = url.split('/').pop() || '';
+    if (filename.length > 20) score += 10;
+    if (filename.length > 40) score += 5;
+
+    // Penalize common junk patterns
+    if (url.includes('blank') || url.includes('placeholder') || url.includes('dummy')) score -= 100;
+    if (url.includes('/themes/') || url.includes('/player/') || url.includes('/assets/')) score -= 50;
+
+    return score;
 };
 
 // API endpoint for scraping
 app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next) => {
     let urlRecord = null;
-    
+
     try {
         const { url } = req.query;
         const engineModule = req.engineModule;
-        
+
         // Track URL processing
         urlRecord = await urlTracker.addUrl(url);
         await urlTracker.updateStatus(urlRecord.id, URL_STATUS.PROCESSING);
-        
+
         // Create a clean options object from query parameters
         const options = {
             url,
             customUserAgent: req.query.custom_user_agent !== 'default' ? req.query.custom_user_agent : undefined,
-            customCookies: req.query.custom_cookies && req.query.custom_cookies !== 'default' 
+            customCookies: req.query.custom_cookies && req.query.custom_cookies !== 'default'
                 ? (() => {
                     try {
                         // Try to parse as JSON first
@@ -384,18 +453,18 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                 })()
                 : undefined,
             userPass: req.query.user_pass !== 'default' ? req.query.user_pass : undefined,
-            timeout: req.query.timeout && req.query.timeout !== 'default' 
-                ? parseInt(req.query.timeout, 10) 
+            timeout: req.query.timeout && req.query.timeout !== 'default'
+                ? parseInt(req.query.timeout, 10)
                 : undefined,
             proxyUrl: req.query.proxy_url !== 'default' ? req.query.proxy_url : undefined,
             proxyAuth: req.query.proxy_auth !== 'default' ? req.query.proxy_auth : undefined,
             cleanup: req.query.cleanup === 'false' ? false : true,
-            delayTime: req.query.delay && req.query.delay !== 'default' 
-                ? parseInt(req.query.delay, 10) 
+            delayTime: req.query.delay && req.query.delay !== 'default'
+                ? parseInt(req.query.delay, 10)
                 : undefined,
             localStorage: req.query.localstorage !== 'default' ? req.query.localstorage : undefined,
-            customEval: req.query.eval && req.query.eval !== 'default' 
-                ? decodeURIComponent(req.query.eval) 
+            customEval: req.query.eval && req.query.eval !== 'default'
+                ? decodeURIComponent(req.query.eval)
                 : undefined,
             basicAuth: req.query.basic_auth !== 'default' ? req.query.basic_auth : undefined
         };
@@ -409,7 +478,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             util.Logging.info(`Cache hit for ${url}`);
             logEmitter.broadcast('info', 'Cache hit', { url });
             res.setHeader("X-Cache", "HIT");
-            
+
             // Format response - always use raw HTML content from cache
             const response = {
                 html: cachedResult.html,
@@ -417,12 +486,12 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                 url: url,
                 cached: true
             };
-            
+
             // Include video URLs if found in cache
             if (cachedResult.videoUrls && cachedResult.videoUrls.length > 0) {
                 // Process the video URLs using the helper function
                 const filteredVideoUrls = formatVideoUrls(cachedResult.videoUrls);
-                
+
                 if (filteredVideoUrls.length > 0) {
                     // Check if any videos have been synced to CDN and replace URLs for response
                     // But always keep originalUrl for tracking
@@ -430,7 +499,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                     const enhancedVideoUrls = filteredVideoUrls.map(video => {
                         const originalUrl = video.originalUrl || video.url;
                         // Find synced video record matching this URL
-                        const syncedRecord = allVideos.find(v => 
+                        const syncedRecord = allVideos.find(v =>
                             v.videoUrl === originalUrl && v.status === 'synced' && v.s3Url
                         );
                         if (syncedRecord) {
@@ -449,7 +518,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                     response.videoUrls = enhancedVideoUrls;
                 }
             }
-            
+
             // Update URL status to done with cached result
             // URL Tracker stores ORIGINAL URLs (for Admin UI "Videos Found" display)
             if (urlRecord) {
@@ -459,7 +528,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                     mimeType: video.mimeType || '',
                     isHLS: video.isHLS || false
                 }));
-                
+
                 const cachedResponse = {
                     htmlLength: cachedResult.html?.length || 0,
                     htmlPreview: cachedResult.html?.substring(0, 500) || '',
@@ -469,51 +538,62 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                 };
                 await urlTracker.updateStatus(urlRecord.id, URL_STATUS.DONE, null, cachedResponse, cacheKey);
             }
-            
+
             // Track ONLY the best video to avoid storage bloat (no need to append - already in cached HTML)
             if (response.videoUrls && response.videoUrls.length > 0) {
                 const autoSyncEnabled = isAutoSyncVideosEnabled();
                 const autoSync = autoSyncEnabled && s3Storage.isConfigured();
-                
+
                 // NOTE: Video URLs are already appended to cached HTML, no need to append again
                 // The cached HTML contains original URLs; response.videoUrls may have CDN URLs if synced
-                
-                // Select best video for tracking (only track one video)
-                const bestVideo = selectBestVideo(response.videoUrls);
-                
-                // Skip tracking if video is already synced (has CDN URL)
-                if (bestVideo && !bestVideo.synced) {
-                    // Use originalUrl if available (for synced videos), otherwise use url
-                    const originalVideoUrl = bestVideo.originalUrl || bestVideo.url;
-                    
-                    const videoRecord = await videoTracker.addVideo({
-                        videoUrl: originalVideoUrl,
-                        sourceUrl: url,
-                        mimeType: bestVideo.mimeType || 'video/mp4',
-                        isHLS: bestVideo.isHLS || false
-                    });
-                    
-                    // Auto-sync best video to S3 (don't block response)
-                    if (autoSync) {
-                        util.Logging.info(`Auto-sync triggered for BEST video ${videoRecord.id} from cache hit`);
-                        videoTracker.syncVideo(videoRecord.id).catch(err => {
-                            util.Logging.warn(`Auto-sync failed for video ${videoRecord.id}: ${err.message}`);
+
+                // Create prioritized list of sources
+                const prioritizedSources = prioritizeVideoSources(response.videoUrls);
+
+                if (prioritizedSources.length > 0) {
+                    const bestVideo = prioritizedSources[0];
+
+                    // Skip tracking if video is already synced (has CDN URL)
+                    if (bestVideo && !bestVideo.synced) {
+                        const originalVideoUrl = bestVideo.url; // prioritizeVideoSources normalizes to .url
+
+                        const videoRecord = await videoTracker.addVideo({
+                            primaryVideoUrl: originalVideoUrl,
+                            videoUrl: originalVideoUrl,
+                            videoSources: prioritizedSources,
+                            sourceUrl: url,
+                            mimeType: bestVideo.mimeType || 'video/mp4',
+                            isHLS: bestVideo.isHLS || false
                         });
+
+                        // Auto-sync to S3 (don't block response)
+                        if (autoSync) {
+                            // Fire-and-forget queue job (don't await)
+                            videoDownloadQueue.add({
+                                videoId: videoRecord.id,
+                                sourceIndex: 0,
+                                attempt: 1
+                            }).then(() => {
+                                util.Logging.info(`Enqueued download from cache for video ${videoRecord.id} with ${prioritizedSources.length} sources`);
+                            }).catch(err => {
+                                util.Logging.error(`Failed to enqueue download from cache for video ${videoRecord.id}: ${err.message}`);
+                            });
+                        }
                     }
                 }
+
+                return res.json(response);
             }
-            
-            return res.json(response);
         }
 
         // Process the request
         util.Logging.info(`Processing request for ${url} using ${req.params.engine} engine`);
         logEmitter.broadcast('info', 'Scrape started', { url, engine: req.params.engine });
         const engineInstance = engineModule.singleton();
-        
+
         // Initialize res.locals
         res.locals = {};
-        
+
         // Set a request timeout based on the provided timeout or a default
         const requestTimeout = options.timeout || lib.conf.BROWSER.timeout || DEFAULT_BROWSER_TIMEOUT;
         const timeoutId = setTimeout(() => {
@@ -521,56 +601,56 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
             error.code = 504;
             next(error);
         }, requestTimeout + 5000); // Add 5 seconds buffer
-        
+
         try {
             await engineInstance.renderWithOptions(req, res, next, options);
-            
+
             // Clear the timeout
             clearTimeout(timeoutId);
-            
+
             // Cache the result if not already sent
             if (!res.headersSent && res.locals.content) {
                 res.setHeader("X-Cache", "MISS");
-                
+
                 // Start building response
                 let finalHtml = res.locals.content;
                 let processedVideoUrls = [];
-                
+
                 // Process video URLs if found
                 if (res.locals.videoUrls && res.locals.videoUrls.length > 0) {
                     processedVideoUrls = formatVideoUrls(res.locals.videoUrls);
                 }
-                
+
                 // Upload video to S3 if requested (before appending to HTML)
                 if (req.query.upload === 'true' && processedVideoUrls.length > 0) {
                     const video = processedVideoUrls[0];
                     const tempFiles = [];
-                    
+
                     try {
                         util.Logging.info(`Starting video download: ${video.url}`);
-                        
+
                         // Download video (handles both direct and HLS)
                         const downloadResult = await downloadVideo(video, {
                             maxSizeMB: lib.conf.UPLOAD?.maxSizeMB,
                             timeout: lib.conf.UPLOAD?.timeout
                         });
-                        
+
                         tempFiles.push(...downloadResult.tempFiles);
-                        
+
                         // Generate S3 key and upload
                         const s3Key = s3Storage.generateKey(video.url);
                         util.Logging.info(`Uploading video to S3: ${s3Key}`);
-                        
+
                         const s3Url = await s3Storage.uploadFromFile(
                             downloadResult.filePath,
                             s3Key,
                             downloadResult.contentType
                         );
-                        
+
                         // Replace URL in processedVideoUrls
                         video.url = s3Url;
                         delete video.isHLS; // No longer HLS after conversion
-                        
+
                         util.Logging.info(`Video uploaded to S3: ${s3Url}`);
                     } catch (err) {
                         util.Logging.error(`Video upload failed: ${err.message}`);
@@ -579,7 +659,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                         await cleanupTempFiles(tempFiles);
                     }
                 }
-                
+
                 // ==================== Pre-generate CDN URL for BEST video only ====================
                 // HTML will contain OUR CDN URL (for crawlers)
                 // Response.videoUrls will contain ORIGINAL URLs found on page (for display)
@@ -588,102 +668,108 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
                 let bestVideo = null;
                 let videoRecord = null;
                 let cdnUrl = null;
-                
+
                 // Track and pre-generate CDN URL for best video only
                 if (processedVideoUrls.length > 0) {
-                    // Select best video for tracking (only track one video)
-                    bestVideo = selectBestVideo(processedVideoUrls);
-                    
-                    if (bestVideo && !bestVideo.synced) {
-                        const originalVideoUrl = bestVideo.originalUrl || bestVideo.url;
-                        
-                        // Add video to tracker
-                        videoRecord = await videoTracker.addVideo({
-                            videoUrl: originalVideoUrl,
-                            sourceUrl: url,
-                            mimeType: bestVideo.mimeType || 'video/mp4',
-                            isHLS: bestVideo.isHLS || false
-                        });
-                        
-                        // Pre-generate CDN URL (deterministic based on original URL)
-                        // This URL will be valid after upload completes
-                        if (autoSync) {
-                            const extension = bestVideo.isHLS ? 'mp4' : 'mp4'; // HLS converts to MP4
-                            const s3Key = s3Storage.generateKey(originalVideoUrl, extension);
-                            cdnUrl = s3Storage.getPublicUrl(s3Key);
-                            
-                            util.Logging.info(`Pre-generated CDN URL for best video: ${cdnUrl}`);
+                    // Prioritize sources
+                    const prioritizedSources = prioritizeVideoSources(processedVideoUrls);
+
+                    if (prioritizedSources.length > 0) {
+                        bestVideo = prioritizedSources[0];
+
+                        if (bestVideo && !bestVideo.synced) {
+                            const originalVideoUrl = bestVideo.url;
+
+                            // Add video to tracker with ALL sources
+                            videoRecord = await videoTracker.addVideo({
+                                primaryVideoUrl: originalVideoUrl,
+                                videoUrl: originalVideoUrl,
+                                videoSources: prioritizedSources,
+                                sourceUrl: url,
+                                mimeType: bestVideo.mimeType,
+                                isHLS: bestVideo.isHLS
+                            });
+
+                            // Pre-generate CDN URL based on primary URL
+                            if (autoSync) {
+                                const extension = bestVideo.isHLS ? 'mp4' : 'mp4';
+                                const s3Key = s3Storage.generateKey(originalVideoUrl, extension);
+                                cdnUrl = s3Storage.getPublicUrl(s3Key);
+                                util.Logging.info(`Pre-generated CDN URL for best video: ${cdnUrl}`);
+                            }
                         }
                     }
                 }
-                
+
                 // Insert ONLY our CDN URL into HTML (for crawlers to consume)
-                // This is different from response.videoUrls which shows original URLs
                 if (autoSyncEnabled && cdnUrl) {
                     const cdnVideoForHtml = [{ url: cdnUrl }];
                     finalHtml = insertVideoUrlsIntoHtml(finalHtml, cdnVideoForHtml);
                     util.Logging.info(`Inserted OUR CDN URL into HTML: ${cdnUrl}`);
                 }
-                
+
                 // Create cache object with FINAL HTML
                 const cacheObject = {
                     html: finalHtml
                 };
-                
-                // Store ORIGINAL video URLs in cache (not CDN URLs)
-                // Use originalUrl because video.url may have been mutated by upload process
+
+                // Store ORIGINAL video URLs in cache
                 if (processedVideoUrls.length > 0) {
                     cacheObject.videoUrls = processedVideoUrls.map(video => ({
-                        url: video.originalUrl || video.url, // Always use original URL
+                        url: video.originalUrl || video.url,
                         mimeType: video.mimeType || ''
                     }));
-                    // Also store the CDN URL separately for reference
                     if (cdnUrl) {
                         cacheObject.cdnUrl = cdnUrl;
                     }
                 }
-                
+
                 // Save to cache
                 await cache.set(cacheKey, cacheObject);
-                
+
                 // Build response object
                 const response = {
                     html: finalHtml,
                     apicalls: lib.conf.API_CALLS_LIMIT,
                     url: url
                 };
-                
-                // response.videoUrls = ORIGINAL URLs found on page (for Videos Found display in Admin UI)
-                // Use originalUrl because video.url may have been mutated by upload process
+
+                // response.videoUrls = ORIGINAL URLs
                 if (processedVideoUrls.length > 0) {
                     response.videoUrls = processedVideoUrls.map(video => ({
-                        url: video.originalUrl || video.url, // Always use original URL for display
+                        url: video.originalUrl || video.url,
                         mimeType: video.mimeType || '',
                         isHLS: video.isHLS || false
                     }));
                 }
-                
+
                 // Trigger async upload AFTER response is built (don't block response)
-                if (bestVideo && videoRecord && autoSync && !bestVideo.s3Url) {
-                    util.Logging.info(`Auto-sync triggered for BEST video ${videoRecord.id}`);
-                    videoTracker.syncVideo(videoRecord.id).catch(err => {
-                        util.Logging.warn(`Auto-sync failed for video ${videoRecord.id}: ${err.message}`);
+                if (videoRecord && autoSync) {
+                    // Enqueue download job (fire-and-forget - don't await)
+                    videoDownloadQueue.add({
+                        videoId: videoRecord.id,
+                        sourceIndex: 0,
+                        attempt: 1
+                    }).then(() => {
+                        util.Logging.info(`Enqueued download job for video ${videoRecord.id} with ${videoRecord.videoSources?.length || 1} sources`);
+                    }).catch(err => {
+                        util.Logging.error(`Failed to enqueue download job for video ${videoRecord.id}: ${err.message}`);
                     });
                 }
-                
-                // Update URL status to done with scrape result (include cacheKey for debug view)
+
+                // Update URL status to done with scrape result
                 if (urlRecord) {
                     await urlTracker.updateStatus(urlRecord.id, URL_STATUS.DONE, null, response, cacheKey);
                 }
-                
+
                 res.json(response);
                 // Done Process the request
                 util.Logging.info(`Response sent for ${url} using ${req.params.engine} engine`);
-                logEmitter.broadcast('info', 'Scrape completed', { 
-                    url, 
+                logEmitter.broadcast('info', 'Scrape completed', {
+                    url,
                     htmlLength: response.html?.length || 0,
                     videoCount: response.videoUrls?.length || 0,
-                    cached: false 
+                    cached: false
                 });
             }
         } catch (error) {
@@ -695,10 +781,10 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
         if (urlRecord) {
             await urlTracker.updateStatus(urlRecord.id, URL_STATUS.ERROR, error.message, null, null, error.snapshotUrl);
         }
-        logEmitter.broadcast('error', 'Scrape failed', { 
-            url: req.query.url, 
+        logEmitter.broadcast('error', 'Scrape failed', {
+            url: req.query.url,
             error: error.message,
-            snapshotUrl: error.snapshotUrl 
+            snapshotUrl: error.snapshotUrl
         });
         next(error);
     }
@@ -708,7 +794,7 @@ app.get("/apis/scrape/v1/:engine", validateScrapeRequest, async (req, res, next)
 app.get("/info", async (req, res, next) => {
     try {
         const version = await lib.ENGINES.puppeteer.singleton().version();
-        
+
         res.json({
             name: info.name,
             version: info.version,
@@ -745,16 +831,16 @@ app.get("/health", (req, res) => {
 app.get("/apis/cache/clear", async (req, res, next) => {
     try {
         const { pattern } = req.query;
-        
+
         // Log the cache clear request
         util.Logging.info(`Cache clear request received ${pattern ? `with pattern: ${pattern}` : '(all cache)'}`);
-        
+
         // Clear cache with optional pattern
         await cache.clear(pattern || '*');
-        
+
         // Get cache statistics after clearing
         const stats = await cache.getStats();
-        
+
         res.json({
             success: true,
             message: `Cache ${pattern ? `matching pattern '${pattern}'` : 'completely'} cleared`,
@@ -770,7 +856,7 @@ app.get("/apis/cache/stats", async (req, res, next) => {
     try {
         // Get cache statistics
         const stats = await cache.getStats();
-        
+
         res.json({
             success: true,
             stats
@@ -808,29 +894,29 @@ app.use((err, req, res, next) => {
     if (res.headersSent) {
         return next(err);
     }
-    
+
     // Use default error code of 500 if not specified
     const code = err.code || 500;
-    
+
     // Get the target URL from query parameters if available
     const targetUrl = req.query && req.query.url ? req.query.url : req.originalUrl || req.url;
-    
+
     // Format response according to the example
-    const result = { 
+    const result = {
         html: err.message,
         apicalls: lib.conf.API_CALLS_LIMIT, // Use configured limit
         url: targetUrl,
         error: err.message
     };
-    
+
     // Log error details
     util.Logging.error(`Error processing request: ${err.message}`);
-    
+
     // Include stack trace in non-production environments
     if (process.env.NODE_ENV !== "production") {
         result.stack = err.stack ? err.stack.split("\n") : [];
     }
-    
+
     res.status(code);
     res.json(result);
 });
@@ -841,7 +927,7 @@ if (process.env.NODE_ENV !== "test") {
         try {
             // Load configurations and initialize
             await lib.start();
-            
+
             // Start listening
             app.listen(lib.conf.PORT, lib.conf.HOST, () => {
                 util.Logging.info(`Listening on ${lib.conf.HOST}:${lib.conf.PORT}`);

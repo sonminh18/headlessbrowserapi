@@ -27,7 +27,7 @@ describe("Browser Configuration", function() {
     it("should use default browser configuration when no env vars are set", async function() {
         assert.strictEqual(config.conf.BROWSER.type, "chromium");
         assert.strictEqual(config.conf.BROWSER.executablePath, null);
-        
+
         // Check each necessary argument exists, rather than strict array comparison
         const expectedArgs = [
             "--no-sandbox",
@@ -37,15 +37,15 @@ describe("Browser Configuration", function() {
             "--disable-background-networking",
             "--js-flags=--expose-gc --max-old-space-size=512"
         ];
-        
+
         // Make sure all expected args are present (order doesn't matter)
         expectedArgs.forEach(arg => {
             assert.ok(
-                config.conf.BROWSER.args.includes(arg), 
+                config.conf.BROWSER.args.includes(arg),
                 `Browser args should include ${arg}`
             );
         });
-        
+
         assert.strictEqual(config.conf.BROWSER.viewport.width, 1366);
         assert.strictEqual(config.conf.BROWSER.viewport.height, 768);
         assert.strictEqual(config.conf.BROWSER.viewport.deviceScaleFactor, 1);
