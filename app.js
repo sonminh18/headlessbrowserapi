@@ -11,7 +11,7 @@ const { DEFAULT_BROWSER_TIMEOUT } = require("./lib/util/config");
 const { s3Storage } = require("./lib/util/s3-storage");
 const { downloadVideo, cleanupTempFiles } = require("./lib/util/video-downloader");
 const { createAdminRouter } = require("./lib/routes/admin");
-const { videoTracker, selectBestVideo } = require("./lib/util/video-tracker");
+const { videoTracker, selectBestVideo, AD_URL_PATTERNS } = require("./lib/util/video-tracker");
 const { urlTracker, URL_STATUS } = require("./lib/util/url-tracker");
 const { logEmitter } = require("./lib/util/log-emitter");
 const { videoDownloadQueue } = require("./lib/util/video-download-queue");
@@ -310,8 +310,8 @@ const formatVideoUrls = (videoUrls) => {
                 return false;
             }
 
-            // Skip known ad/tracker video CDNs (serve same shared video across pages)
-            if (/adtng\.|afcdn\.net|javhdhello\.com|vcmdiawe\.com|saawsedge\.com|adnxs\.|pubmatic\./i.test(lowercaseUrl)) {
+            // Skip known ad/tracker video CDNs (uses shared AD_URL_PATTERNS + env extras)
+            if (AD_URL_PATTERNS.some(pattern => pattern.test(lowercaseUrl))) {
                 return false;
             }
 
@@ -478,13 +478,9 @@ const prioritizeVideoSources = (videos) => {
         }
 
         // Penalize known ad/tracker networks and shared video CDNs
-        // These domains serve ads or the same video across many different pages
-        if (/adtng\.|afcdn\.|adserver|doubleclick|adsystem|adnxs\.|pubmatic\.|taboola\.|outbrain\./i.test(url)) {
+        // Uses centralized AD_URL_PATTERNS (built-in + env extras)
+        if (AD_URL_PATTERNS.some(pattern => pattern.test(url))) {
             downloadScore -= 150;
-        }
-        // Penalize generic video ad CDNs (serve shared/reused content across sites)
-        if (/javhdhello\.com|vcmdiawe\.com|saawsedge\.com/i.test(url)) {
-            downloadScore -= 100;
         }
 
         // Penalize suspicious ad/tracking patterns in path
