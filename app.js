@@ -282,12 +282,36 @@ const validateScrapeRequest = (req, res, next) => {
 const formatVideoUrls = (videoUrls) => {
     return videoUrls
         .filter(video => {
-            // Validate URL is a video by extension and not an image
             const url = video.url || '';
             const lowercaseUrl = url.toLowerCase();
+            const urlPath = lowercaseUrl.split("?")[0].split("#")[0];
 
             // Skip URLs with image extensions
             if (lowercaseUrl.match(/\.(jpe?g|png|gif|bmp|webp)(\?.*)?$/i)) {
+                return false;
+            }
+
+            // Skip stream segments (HLS .ts, DASH .m4s) - not downloadable individually
+            if (urlPath.endsWith('.ts') || urlPath.endsWith('.m4s') || urlPath.endsWith('.m4f')) {
+                return false;
+            }
+            // Skip numbered segment patterns
+            if (/\/seg[-_]?\d+/i.test(urlPath) || /\/chunk[-_]?\d+/i.test(urlPath)) {
+                return false;
+            }
+
+            // Skip blob URLs (not downloadable outside browser context)
+            if (lowercaseUrl.startsWith('blob:')) {
+                return false;
+            }
+
+            // Skip data URIs
+            if (lowercaseUrl.startsWith('data:')) {
+                return false;
+            }
+
+            // Skip known ad/tracker video CDNs (serve same shared video across pages)
+            if (/adtng\.|afcdn\.net|javhdhello\.com|vcmdiawe\.com|saawsedge\.com|adnxs\.|pubmatic\./i.test(lowercaseUrl)) {
                 return false;
             }
 
@@ -297,14 +321,19 @@ const formatVideoUrls = (videoUrls) => {
                 (video.mimeType || '').includes('mpegURL') ||
                 (video.mimeType || '').includes('dash+xml');
 
+            // Exclude video/MP2T (HLS segment MIME type)
+            if ((video.mimeType || '').toLowerCase().includes('mp2t')) {
+                return false;
+            }
+
             return hasVideoExtension || hasVideoMimeType;
         })
         .map(video => {
-            // Return url with originalUrl preserved for tracking
             const videoInfo = {
                 url: video.url,
-                originalUrl: video.url, // Always keep original URL for cache/tracking
-                mimeType: video.mimeType || ''
+                originalUrl: video.url,
+                mimeType: video.mimeType || '',
+                isPrimaryPlayer: video.isPrimaryPlayer || false
             };
 
             // Add isHLS flag for HLS videos
@@ -357,72 +386,180 @@ const insertVideoUrlsIntoHtml = (html, videoUrls) => {
     return html + videoBlock;
 };
 
-// Prioritize video sources by format and quality
-// Returns sorted array: MP4 first, then WebM, HLS, DASH
+/**
+ * Prioritize video sources for the download queue.
+ * Sorts by: downloadability (format + URL pattern) × quality (resolution).
+ * Returns sorted array with the best downloadable source first,
+ * providing a natural fallback chain for the download queue.
+ *
+ * Scoring criteria:
+ * - Downloadability: Direct download URLs > Direct MP4 > WebM > HLS > DASH
+ * - Quality: 4K > 1080p > 720p > 480p > 360p > 240p
+ * - Penalties: Blob URLs, segments, junk files, theme/asset paths
+ *
+ * @param {Array} videos - Array of video objects from formatVideoUrls
+ * @returns {Array} Sorted array with score metadata
+ */
 const prioritizeVideoSources = (videos) => {
     if (!videos || videos.length === 0) return [];
 
-    return videos.map(v => ({
-        url: v.originalUrl || v.url,
-        mimeType: v.mimeType || 'video/mp4',
-        isHLS: v.isHLS || false,
-        priority: calculatePriority(v),
-        score: calculateQualityScore(v)
-    }))
-        .sort((a, b) => {
-            // First sort by priority (format type)
-            if (a.priority !== b.priority) return b.priority - a.priority;
-            // Then by quality score
-            return b.score - a.score;
+    const scored = videos.map(v => {
+        const url = (v.originalUrl || v.url || '').toLowerCase();
+        const urlPath = url.split("?")[0].split("#")[0];
+        // Get actual file extension from the last path segment
+        const lastSegment = urlPath.split("/").pop() || "";
+        const lastDot = lastSegment.lastIndexOf(".");
+        const ext = lastDot !== -1 ? lastSegment.substring(lastDot) : "";
+
+        let downloadScore = 0;
+        let qualityScore = 0;
+
+        // ==================== DOWNLOADABILITY SCORING ====================
+
+        // Direct download path indicators (very high confidence of downloadability)
+        if (/\/(dload|download|dl|get|fetch)\//i.test(url)) {
+            downloadScore += 50;
+        }
+
+        // Primary player bonus (moderate, NOT absolute - high-quality dload links should win)
+        if (v.isPrimaryPlayer) {
+            downloadScore += 20;
+        }
+
+        // Format scoring based on ACTUAL file extension (not mid-path matches)
+        if (ext === '.mp4') {
+            downloadScore += 80;
+        } else if (ext === '.webm') {
+            downloadScore += 70;
+        } else if (ext === '.mov' || ext === '.avi' || ext === '.mkv' || ext === '.m4v') {
+            downloadScore += 60;
+        } else if (ext === '.m3u8' || v.isHLS) {
+            downloadScore += 40; // Needs yt-dlp but reliable
+        } else if (ext === '.mpd') {
+            downloadScore += 30; // Needs yt-dlp
+        }
+
+        // Penalize non-downloadable formats (safety net - should be filtered earlier)
+        if (ext === '.ts' || ext === '.m4s' || ext === '.m4f') {
+            downloadScore -= 200;
+        }
+        if (url.startsWith('blob:')) {
+            downloadScore -= 200;
+        }
+
+        // CDN/content path bonus (URLs in content directories are usually real videos)
+        if (/\/(storage|uploads?|videos?|media|content|files?|stream|vod)\//i.test(url)) {
+            downloadScore += 10;
+        }
+
+        // Known CDN domain bonus
+        if (/cloudfront|akamai|cdn\.|gvideo|googlevideo|fbcdn/i.test(url)) {
+            downloadScore += 5;
+        }
+
+        // Same-site domain bonus - video URL from same domain as the page is more likely to be content
+        // (External domains are often ads or shared resources)
+        try {
+            const videoHost = new URL(v.originalUrl || v.url).hostname;
+            // URLs that contain the site's own domain patterns get a bonus
+            if (/\/(dload|download)\//i.test(url)) {
+                downloadScore += 15; // Download links from the site itself
+            }
+        } catch { /* ignore parse errors */ }
+
+        // Penalize junk/placeholder files
+        if (/blank|placeholder|dummy|empty|loading|pixel|spacer/i.test(url)) {
+            downloadScore -= 100;
+        }
+
+        // Penalize theme/asset paths (usually player UI assets, not content)
+        if (/\/(themes?|player|assets?|plugins?|vendor|lib|js|css|dist)\//i.test(url)) {
+            downloadScore -= 50;
+        }
+
+        // Penalize known ad/tracker networks and shared video CDNs
+        // These domains serve ads or the same video across many different pages
+        if (/adtng\.|afcdn\.|adserver|doubleclick|adsystem|adnxs\.|pubmatic\.|taboola\.|outbrain\./i.test(url)) {
+            downloadScore -= 150;
+        }
+        // Penalize generic video ad CDNs (serve shared/reused content across sites)
+        if (/javhdhello\.com|vcmdiawe\.com|saawsedge\.com/i.test(url)) {
+            downloadScore -= 100;
+        }
+
+        // Penalize suspicious ad/tracking patterns in path
+        if (/beacon|track|analytics|impression|advert|pixel|pstool=|psid=|brokercpp/i.test(url)) {
+            downloadScore -= 80;
+        }
+
+        // Penalize videos from /library/ paths (often ad creative assets)
+        if (/\/library\/\d+\//i.test(url)) {
+            downloadScore -= 40;
+        }
+
+        // ==================== QUALITY SCORING ====================
+
+        // Extract resolution from URL patterns
+        // Supports: 1080p, -1080p.mp4, /1080/, _1080_, etc.
+        if (/2160p|[-_/]2160[-_/.]|4k|uhd/i.test(url)) qualityScore += 100;
+        else if (/1440p|[-_/]1440[-_/.]|2k/i.test(url)) qualityScore += 95;
+        else if (/1080p|[-_/]1080[-_/.]|fullhd|fhd/i.test(url)) qualityScore += 90;
+        else if (/720p|[-_/]720[-_/.](?!\d)/i.test(url)) qualityScore += 80;
+        else if (/480p|[-_/]480[-_/.]|[-/]sd[-/\.]/i.test(url)) qualityScore += 60;
+        else if (/360p|[-_/]360[-_/.]/i.test(url)) qualityScore += 40;
+        else if (/240p|[-_/]240[-_/.]/i.test(url)) qualityScore += 20;
+        else if (/144p|[-_/]144[-_/.]/i.test(url)) qualityScore += 10;
+
+        // Also check for resolution in path segments (e.g., /2160/, /1080/)
+        if (!qualityScore) {
+            const resMatch = url.match(/\/(\d{3,4})\//);
+            if (resMatch) {
+                const res = parseInt(resMatch[1]);
+                if (res >= 2160) qualityScore += 100;
+                else if (res >= 1440) qualityScore += 95;
+                else if (res >= 1080) qualityScore += 90;
+                else if (res >= 720) qualityScore += 80;
+                else if (res >= 480) qualityScore += 60;
+                else if (res >= 360) qualityScore += 40;
+                else if (res >= 240) qualityScore += 20;
+            }
+        }
+
+        // Non-blob URL bonus
+        if (!url.startsWith('blob:')) {
+            downloadScore += 10;
+        }
+
+        // Total score: downloadability weighted 2x over quality
+        const totalScore = (downloadScore * 2) + qualityScore;
+
+        return {
+            url: v.originalUrl || v.url,
+            mimeType: v.mimeType || 'video/mp4',
+            isHLS: v.isHLS || false,
+            isPrimaryPlayer: v.isPrimaryPlayer || false,
+            score: totalScore,
+            downloadScore,
+            qualityScore
+        };
+    })
+    // Remove obviously non-downloadable sources (segments, blobs that slipped through)
+    .filter(v => v.downloadScore > -100)
+    .sort((a, b) => {
+        // Sort by total score descending (isPrimaryPlayer is already factored into score)
+        return b.score - a.score;
+    });
+
+    // Log the ranking for debugging
+    if (scored.length > 0) {
+        util.Logging.info(`Video source ranking (${scored.length} sources):`);
+        scored.slice(0, 5).forEach((s, i) => {
+            const urlPreview = (s.url || '').substring(0, 80);
+            util.Logging.info(`  #${i + 1}: [D:${s.downloadScore} Q:${s.qualityScore} T:${s.score}] ${urlPreview}...`);
         });
-};
+    }
 
-// Calculate priority based on video format
-const calculatePriority = (video) => {
-    const url = (video.url || '').toLowerCase();
-
-    // MP4 = highest priority (easiest to download, no conversion)
-    if (url.includes('.mp4')) return 100;
-
-    // WebM = good priority (direct video format)
-    if (url.includes('.webm')) return 80;
-
-    // HLS = medium priority (requires conversion)
-    if (video.isHLS || url.includes('.m3u8')) return 60;
-
-    // DASH = lower priority (requires conversion)
-    if (url.includes('.mpd')) return 40;
-
-    // Other video formats
-    if (url.includes('.mov') || url.includes('.avi')) return 70;
-
-    // Default
-    return 50;
-};
-
-// Calculate quality score based on URL indicators
-const calculateQualityScore = (video) => {
-    const url = (video.url || '').toLowerCase();
-    let score = 0;
-
-    // Quality indicators
-    if (url.includes('4k') || url.includes('2160p') || url.includes('uhd')) score += 100;
-    else if (url.includes('1080p') || url.includes('fullhd') || url.includes('fhd')) score += 90;
-    else if (url.includes('720p') || url.includes('hd')) score += 80;
-    else if (url.includes('480p') || url.includes('sd')) score += 60;
-    else if (url.includes('360p')) score += 40;
-    else if (url.includes('240p')) score += 20;
-
-    // Prefer longer, more descriptive filenames (likely main content)
-    const filename = url.split('/').pop() || '';
-    if (filename.length > 20) score += 10;
-    if (filename.length > 40) score += 5;
-
-    // Penalize common junk patterns
-    if (url.includes('blank') || url.includes('placeholder') || url.includes('dummy')) score -= 100;
-    if (url.includes('/themes/') || url.includes('/player/') || url.includes('/assets/')) score -= 50;
-
-    return score;
+    return scored;
 };
 
 // API endpoint for scraping
