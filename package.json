@@ -59,6 +59,8 @@
         "node-cache": "^5.1.2",
         "pidusage": "^4.0.1",
         "puppeteer": "^24.7.1",
+        "puppeteer-extra": "^3.3.6",
+        "puppeteer-extra-plugin-stealth": "^2.11.2",
         "uuid": "^9.0.1",
         "yonius": "^0.13.11"
     },
